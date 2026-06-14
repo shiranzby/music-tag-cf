@@ -2,13 +2,16 @@
 
 > 浏览器端音乐元数据编辑器。零服务器成本，所有操作在本地浏览器内存中完成，文件不上传。
 
-[![Version](https://img.shields.io/badge/version-v2.1-blue)](https://music-tag-cf.shy2958779577.workers.dev)
+[![Version](https://img.shields.io/badge/version-v2.1-blue)](https://musictag.cc.cd)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Deploy to Cloudflare Workers](https://img.shields.io/badge/Deploy-Cloudflare%20Workers-orange)](https://workers.cloudflare.com)
 
-**在线体验**：https://music-tag-cf.shy2958779577.workers.dev
+<img width="2537" height="1400" alt="image" src="https://github.com/user-attachments/assets/88ad5b4b-4b66-44a9-8101-8da0d78452cb" />
 
----
+
+<p align="center">
+  <b>🌐 在线体验：</b><a href="https://musictag.cc.cd">demo</a>
+</p>
 
 ## ✨ 特性
 
