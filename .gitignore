@@ -1,0 +1,18 @@
+node_modules/
+.wrangler/
+dist/
+*.log
+.DS_Store
+
+# 内部文件 — 不上传 GitHub
+.context_recovery.md
+issues.md
+src/template_v1.0.html
+src/template_v35.html
+test_*.js
+test_*.mjs
+test_*.cjs
+REPORT_DEPLOY.md
+revert_v35.py
+package-lock.json
+test_screenshot_*.png
