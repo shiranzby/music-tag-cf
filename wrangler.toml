@@ -1,0 +1,22 @@
+# music-tag-cf: Cloudflare Native Music Tag Editor
+# Deploy: npx wrangler deploy
+name = "music-tag-cf"
+main = "src/worker.js"
+compatibility_date = "2026-06-12"
+account_id = "0940972ec06021afad128e227c5b0822"
+
+# Free plan: 100MB single request, 10ms CPU per request
+[vars]
+# Optional: custom API tokens for enhanced scraping
+# NET_EASE_COOKIE = ""
+# QQ_MUSIC_COOKIE = ""
+
+[[rules]]
+type = "Data"
+# Cache API responses at edge for 5 minutes
+globs = ["/api/tag/**"]
+fallthrough = true
+cacheTtlByStatus = { "200-299" = 300, "400-499" = 0, "500-599" = 0 }
+
+[observability]
+enabled = true

@@ -1,0 +1,25 @@
+{
+  "name": "music-tag-cf",
+  "version": "2.2.0",
+  "description": "Cloudflare Native Music Tag Editor - Edit music metadata in browser, powered by Cloudflare Workers",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "logs": "wrangler tail"
+  },
+  "keywords": [
+    "music",
+    "id3",
+    "metadata",
+    "cloudflare",
+    "workers",
+    "music-tag"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/mcp": "^0.0.76",
+    "playwright": "^1.60.0",
+    "wrangler": "^4.0.0"
+  }
+}

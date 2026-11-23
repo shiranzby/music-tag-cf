@@ -1,0 +1,3380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Music Tag Editor - Cloudflare Edition</title>
+<style>
+/* ── View Transitions (for v4.0 ripple animation) ── */
+::view-transition-old(root) { animation: none; }
+::view-transition-new(root) { animation: none; }
+
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0f0f14;
+  --bg-secondary:#1a1a24;
+  --bg-card:#222231;
+  --bg-input:#2a2a3a;
+  --border:#3a3a50;
+  --border-focus:#2563EB;
+  --text-primary:#e8e8f0;
+  --text-secondary:#9898b0;
+  --text-muted:#6a6a80;
+  --accent:#2563EB;
+  --accent-hover:#3B82F6;
+  --success:#00cec9;
+  --danger:#e17055;
+  --warning:#fdcb6e;
+  --radius:10px;
+  --radius-lg:16px;
+  --shadow:0 4px 24px rgba(0,0,0,.4);
+}
+/* Light theme */
+body.light{
+  --bg-primary:#f5f5f8;
+  --bg-secondary:#ffffff;
+  --bg-card:#f0f0f5;
+  --bg-input:#ffffff;
+  --border:#d0d0dd;
+  --border-focus:#2563EB;
+  --text-primary:#1a1a2e;
+  --text-secondary:#555570;
+  --text-muted:#8888a0;
+  --shadow:0 4px 24px rgba(0,0,0,.1);
+}
+html{font-size:16px;height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg-primary);
+  color:var(--text-primary);
+  min-height:100%;
+  line-height:1.6;
+}
+a{color:var(--accent);text-decoration:none}
+
+/* ── Layout ── */
+.app{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;height:100vh;}
+.header{
+  background:var(--bg-secondary);
+  border-bottom:1px solid var(--border);
+  padding:10px 20px;
+  display:flex;align-items:center;gap:12px;
+  flex-shrink:0;
+}
+.header h1{font-size:1.5rem;font-weight:600;letter-spacing:-.3px;line-height:1}
+.main{display:flex;flex:1;gap:0;overflow:hidden}
+.panel{padding:16px}
+
+/* ── Upload Zone ── */
+.upload-panel{
+  width:40.7%;min-width:280px;max-width:440px;
+  background:var(--bg-secondary);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:16px;
+  overflow:hidden;
+}
+.dropzone{
+  border:2px dashed var(--border);
+  border-radius:var(--radius-lg);
+  padding:32px 16px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .2s;
+  background:var(--bg-card);
+  flex-shrink:0;
+}
+.dropzone:hover,.dropzone.dragover{
+  border-color:var(--accent);
+  background:rgba(37,99,235,.08);
+}
+.dropzone svg{width:48px;height:48px;margin-bottom:12px;opacity:.5}
+.dropzone p{color:var(--text-secondary);font-size:.85rem}
+.dropzone .browse{color:var(--accent);font-weight:500}
+.format-hint{color:var(--text-muted);font-size:.75rem;margin-top:4px}
+
+/* ── File List ── */
+.file-list{flex:1;overflow-y:auto;min-height:0;padding-bottom:0}
+.file-list h3{
+  font-size:.8rem;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text-muted);margin-bottom:0;white-space:nowrap;
+}
+.file-list-header{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:0;flex-wrap:nowrap;
+  position:sticky;top:0;z-index:2;background:var(--bg-secondary);
+  padding-bottom:10px
+}
+.file-list-header h3{
+  font-size:.78rem;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text-muted);margin:0;white-space:nowrap;flex-shrink:2;
+}
+.file-list-actions{
+  display:flex;gap:4px;flex-wrap:nowrap;margin-left:auto;flex-shrink:0;
+}
+.file-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;margin-bottom:6px;
+  border-radius:var(--radius);cursor:pointer;
+  background:var(--bg-card);border:1px solid transparent;
+  transition:all .15s;
+}
+.file-item:hover{border-color:var(--border)}
+.file-item.active{border-color:var(--accent);background:rgba(37,99,235,.1)}
+.file-item .icon{
+  width:36px;height:36px;border-radius:6px;
+  background:var(--accent);display:flex;align-items:center;justify-content:center;
+  font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0;
+  overflow:hidden;
+}
+.file-item .icon img{width:100%;height:100%;object-fit:cover}
+.file-item .info{flex:1;min-width:0}
+.file-item .name{font-size:.82rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-item .size{font-size:.7rem;color:var(--text-muted)}
+.file-item .status{font-size:.65rem;padding:2px 8px;border-radius:10px;flex-shrink:0}
+.file-item .status.modified{background:rgba(0,206,201,.15);color:var(--success)}
+.file-item .status.original{background:rgba(106,106,128,.15);color:var(--text-muted)}
+
+/* ── Editor Panel ── */
+.editor-panel{flex:1;display:flex;flex-direction:column;gap:16px;border-right:1px solid var(--border);box-shadow:-2px 0 12px rgba(0,0,0,.08);overflow-y:auto}
+/* Hidden scrollbar — scrollable but no visible bar */
+.file-list::-webkit-scrollbar,.editor-panel::-webkit-scrollbar{width:0;display:none}
+.file-list,.editor-panel{scrollbar-width:none;-ms-overflow-style:none}
+.editor-empty{
+  display:flex;align-items:center;justify-content:center;flex:1;
+  color:var(--text-muted);font-size:.9rem;
+}
+.editor-content{display:flex;flex-direction:column;gap:8px}
+.editor-header{
+  display:flex;align-items:center;gap:10px;
+  padding-bottom:6px;border-bottom:1px solid var(--border);
+}
+.editor-header h2{font-size:.9rem;font-weight:600;flex:1;min-width:0}
+.editor-header .btn{padding:6px 12px;font-size:.78rem;white-space:nowrap}
+
+/* ── Editor Grid ── */
+.editor-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+}
+.editor-grid.full{grid-template-columns:1fr}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group label{
+  font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--text-muted);font-weight:500;
+}
+.form-group input,.form-group textarea,.form-group select{
+  background:var(--bg-input);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:8px 10px;
+  color:var(--text-primary);
+  font-size:.82rem;
+  font-family:inherit;
+  transition:border-color .2s;
+  outline:none;
+}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{
+  border-color:var(--border-focus);
+}
+.form-group textarea{resize:vertical;min-height:60px}
+
+/* ── Cover Art Row ── (matches editor-grid 2-col for alignment) */
+.cover-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch;margin-bottom:6px}
+.cover-left{display:flex;gap:8px;align-items:stretch;min-width:0}
+.cover-preview{
+  width:100%;aspect-ratio:1;max-width:200px;border-radius:var(--radius);
+  background:var(--bg-input);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;overflow:hidden;justify-self:start;
+}
+.cover-preview img{width:100%;height:100%;object-fit:cover}
+.cover-preview .placeholder{color:var(--text-muted);font-size:.7rem;text-align:center;padding:4px}
+.cover-actions{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.cover-actions .btn-cover{
+  width:100%;background:var(--bg-input);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px 12px;
+  color:var(--text-primary);font-size:.85rem;font-family:inherit;
+  cursor:pointer;text-align:center;transition:border-color .15s;
+}
+.cover-actions .btn-cover:hover{border-color:var(--border-focus)}
+
+/* ── Audio Info & Format Badge ── */
+.audio-info-row{
+  background:var(--bg-input);border:1px solid var(--border);
+  border-radius:var(--radius);padding:8px 12px;
+  color:var(--text-primary);font-size:.85rem;font-family:inherit;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:2px;
+}
+.format-badge{
+  background:var(--bg-input);border:1px solid var(--border);
+  border-radius:var(--radius);padding:8px 12px;
+  color:var(--text-primary);font-size:.9rem;font-weight:700;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.format-badge .quality-tag{
+  font-size:.65rem;font-weight:600;padding:2px 8px;border-radius:3px;
+  color:#fff;
+}
+.quality-hr{background:#D4838F}    /* Hi-Res 粉 */
+.quality-hq{background:#6BA08E}    /* HQ 绿 */
+.quality-sq{background:#9A8CBF}    /* SQ 紫 */
+.quality-cd{background:#5B8CB8}    /* CD品质 蓝 */
+
+/* ── Player Panel (desktop, 3rd column) ── */
+.player-panel{
+  display:flex;flex-direction:column;gap:6px;
+  padding:8px;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);justify-content:center;
+}
+.player-panel-title{font-size:.82rem;font-weight:600;color:var(--text-primary);text-align:center;word-break:break-all}
+.player-row{display:flex;align-items:center;gap:6px;justify-content:center}
+.player-row .player-btn-sm{background:none;border:none;font-size:1rem;cursor:pointer;color:var(--text-primary);padding:4px 6px}
+.player-row .player-seek{flex:1;min-width:60px;accent-color:var(--accent)}
+.player-row .player-time{font-size:.72rem;color:var(--text-muted);white-space:nowrap}
+.player-extra-row{display:flex;align-items:center;gap:6px;justify-content:center}
+.player-extra-row .player-btn-sm{background:none;border:none;font-size:.9rem;cursor:pointer;color:var(--text-primary);padding:4px 6px}
+.player-extra-row .volume-slider{width:70px;accent-color:var(--accent)}
+.player-close-btn{position:absolute;top:4px;right:8px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:8px 16px;border:none;border-radius:var(--radius);
+  font-size:.82rem;font-weight:500;cursor:pointer;
+  transition:all .2s;font-family:inherit;
+}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-secondary{background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent)}
+.btn-success{background:var(--success);color:#fff}
+.btn-success:hover{opacity:.9}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:6px 14px;font-size:.78rem;white-space:nowrap;flex-shrink:0}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap}
+.actions{border-top:1px solid var(--border);padding:8px 10px;background:var(--bg-card);border-radius:var(--radius);margin-top:6px;display:flex;flex-wrap:nowrap;gap:6px}
+.actions .btn{white-space:nowrap;padding:8px 12px;font-size:.8rem;flex:1 1 0;min-width:0}
+.actions .btn-group{display:contents}
+
+/* ── Player Bar ── */
+.player-bar{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 16px;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);margin-top:8px;
+}
+.player-btn{
+  background:none;border:none;font-size:1.2rem;cursor:pointer;
+  color:var(--text-primary);padding:4px;line-height:1;
+}
+.player-title{font-size:.82rem;color:var(--text-primary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player-seek{flex:2;min-width:80px;accent-color:var(--accent)}
+.player-time{font-size:.75rem;color:var(--text-muted);white-space:nowrap}
+.player-close{background:none;border:none;font-size:1rem;cursor:pointer;color:var(--text-muted);padding:4px}
+
+/* ── Search Panel ── */
+.search-section{margin-top:6px}
+.search-bar{display:flex;gap:8px;align-items:stretch}
+.search-bar input:focus,.search-bar select:focus{border-color:var(--border-focus)}
+.search-bar input{flex:1}
+.search-results{margin-top:12px}
+.search-result{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;margin-bottom:6px;
+  background:var(--bg-card);border-radius:var(--radius);
+  border:1px solid var(--border);
+}
+.search-result .cover{
+  width:48px;height:48px;border-radius:6px;overflow:hidden;
+  background:var(--bg-input);flex-shrink:0;
+}
+.search-result .cover img{width:100%;height:100%;object-fit:cover}
+.search-result .meta{flex:1;min-width:0}
+.search-result .title{font-size:.85rem;font-weight:500}
+.search-result .artist{font-size:.75rem;color:var(--text-secondary)}
+
+
+/* ── Progress ── */
+.toast{
+  position:fixed;bottom:24px;right:24px;
+  padding:12px 20px;border-radius:var(--radius);
+  font-size:.85rem;z-index:1000;animation:slideIn .3s ease;
+  max-width:400px;
+}
+.toast.info{background:var(--accent);color:#fff}
+.toast.success{background:var(--success);color:#000}
+.toast.error{background:var(--danger);color:#fff}
+.toast.loading{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border)}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  body{font-size:14px;line-height:1.5}
+  .main{flex-direction:column;min-height:0}
+  .panel{padding:12px}
+  .header{padding:10px 16px;gap:8px}
+  .header h1{font-size:1.3rem}
+  .upload-panel{width:100%;min-width:0;border-right:none;border-bottom:1px solid var(--border);flex-shrink:0}
+  .dropzone{padding:12px 10px}
+  .dropzone svg{width:24px;height:24px;margin-bottom:6px}
+  .dropzone p{font-size:.72rem}
+  .dropzone .format-hint{font-size:.65rem;margin-top:2px}
+  .file-list{max-height:25vh;flex:auto}
+  .file-list-header{margin-bottom:0;padding-bottom:8px;gap:4px}
+  .file-list-header h3{font-size:.7rem}
+  .file-list-actions{gap:3px}
+  .file-list-actions .btn-sm{padding:3px 5px;font-size:.65rem}
+  .file-list h3{font-size:.72rem;margin-bottom:8px}
+  .file-item{padding:8px 10px;gap:6px;font-size:.78rem}
+  .file-item .name{font-size:.75rem}
+  .editor-content{gap:10px}
+  .editor-header{padding-bottom:6px;gap:6px;align-items:center}
+  .editor-header h2{font-size:.78rem;line-height:1.3;word-break:break-all}
+  .editor-header .btn{font-size:.72rem;padding:6px 10px;flex-shrink:0}
+  .cover-row{display:grid;grid-template-columns:1fr;gap:8px;align-items:stretch}
+  .cover-left{gap:8px}
+  .cover-preview{width:100%;aspect-ratio:1;max-width:160px;min-width:64px;border-radius:6px;justify-self:start}
+  .cover-actions{gap:4px;min-width:0;justify-content:space-evenly}
+  .player-panel{display:none!important} /* mobile uses fixed playerBar */
+  .cover-actions .btn-cover{font-size:.75rem;padding:7px 8px}
+  .audio-info-row{font-size:.75rem;padding:5px 8px;gap:2px}
+  .format-badge{font-size:.78rem;padding:5px 8px}
+  .format-badge .quality-tag{font-size:.6rem;padding:1px 6px}
+  .editor-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .editor-grid .form-group label{font-size:.65rem}
+  .editor-grid .form-group input{padding:7px 8px;font-size:.75rem}
+  .search-section{margin-top:4px}
+  .search-bar{flex-wrap:nowrap;gap:4px}
+  .search-bar input{min-width:0;flex:1;font-size:.72rem;padding:7px 8px}
+  .search-bar select{flex-shrink:0;font-size:.72rem;padding:7px 6px;max-width:90px}
+  .search-bar .btn{font-size:.72rem;padding:7px 10px;flex-shrink:0}
+  .search-result{padding:8px 10px;gap:8px}
+  .search-result .cover{width:36px;height:36px}
+  .search-result .title{font-size:.78rem}
+  .search-result .artist{font-size:.7rem}
+  .btn{padding:7px 10px;font-size:.75rem}
+  .btn-sm{padding:4px 6px;font-size:.68rem}
+  .player-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;border-radius:0;margin:0;gap:6px;padding:8px 12px}
+  .player-title{font-size:.72rem}
+  .player-seek{flex:1}
+  .player-time{font-size:.68rem}
+  .btn-group{gap:4px;flex-wrap:wrap}
+  .actions{display:block;border-top:1px solid var(--border);padding:10px;background:var(--bg-card);border-radius:var(--radius);margin-top:6px}
+  .actions .btn-group{gap:4px;display:flex;flex-wrap:wrap;margin-top:6px}
+  .actions .btn-group:first-child{margin-top:0}
+  .actions .btn-group .btn{flex:1;min-width:0}
+  .actions .btn{padding:6px 8px;font-size:.72rem}
+}
+</style>
+</head>
+<body>
+<script>
+/* Apply theme IMMEDIATELY before any rendering to prevent dark flash */
+(function(){
+  var t = localStorage.getItem("music-tag-theme");
+  if (t === "light") { document.body.classList.add("light"); }
+  else if (t === "dark") { /* dark is default — no class needed */ }
+  else if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+    document.body.classList.add("light");
+  }
+})();
+</script>
+<div class="app">
+  <header class="header">
+    <h1>🎵 Music Tag Editor</h1>
+    <span style="flex:1"></span>
+    <theme-button value="dark" size="1.5" id="themeBtn"></theme-button>
+  </header>
+
+  <div class="main">
+    <!-- Left Panel: Upload & File List -->
+    <aside class="upload-panel panel">
+      <div class="dropzone" id="dropzone">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+        </svg>
+        <p>拖拽文件到此处 或 <span class="browse">点击浏览</span></p>
+        <p class="format-hint">支持 MP3 / FLAC / M4A / OGG / WAV</p>
+        <input type="file" id="fileInput" multiple accept=".mp3,.flac,.m4a,.mp4,.ogg,.wav,.wma,.ape" hidden>
+      </div>
+
+      <div class="file-list" id="fileList">
+        <div class="file-list-header">
+          <h3>文件列表 (<span id="fileCount">0</span>)</h3>
+          <div class="file-list-actions">
+            <button class="btn btn-secondary btn-sm" onclick="App.toggleSelectAll()" id="selectToggleBtn">☑ 全选</button>
+            <button class="btn btn-secondary btn-sm" onclick="App.invertSelection()">↔ 反选</button>
+            <button class="btn btn-secondary btn-sm" onclick="App.resetCurrent()">↻ 还原</button>
+            <button class="btn btn-secondary btn-sm" onclick="App.clearSelected()" id="clearBtn" disabled>🗑 清除</button>
+          </div>
+        </div>
+        <div id="fileItems"></div>
+      </div>
+    </aside>
+
+    <!-- Right Panel: Editor -->
+    <section class="editor-panel panel" id="editorPanel">
+      <div class="editor-empty" id="editorEmpty">
+        <p>请上传音乐文件开始编辑标签</p>
+      </div>
+
+      <div class="editor-content" id="editorContent" style="display:none">
+        <div class="editor-header">
+          <h2 id="currentFileName" style="flex:1;min-width:0;word-break:break-all;line-height:1.3">—</h2>
+          <button class="btn btn-secondary" onclick="App.renameCurrent()" title="重命名下载文件名" style="white-space:nowrap;flex-shrink:0;padding:5px 10px;font-size:.78rem">✏️ 重命名</button>
+        </div>
+
+        <!-- Cover Row: matches editor-grid 2-col layout -->
+        <div class="cover-row">
+          <div class="cover-left">
+            <div class="cover-preview" id="coverPreview">
+              <span class="placeholder">无封面</span>
+            </div>
+            <div class="cover-actions">
+              <div id="formatBadgeDisplay" class="format-badge">—</div>
+              <div id="formatTagDisplay" class="audio-info-row">—</div>
+              <button class="btn-cover" onclick="document.getElementById('coverFileInput').click()">📷 更换封面</button>
+              <button class="btn-cover" onclick="App.removeCover()">✕ 移除封面</button>
+              <input type="file" id="coverFileInput" accept="image/*" hidden onchange="App.onCoverFileSelected(this)">
+            </div>
+          </div>
+          <!-- Player Panel (2nd column) -->
+          <div class="player-panel" id="playerPanel" style="display:none;position:relative">
+            <span class="player-panel-title" id="playerPanelTitle">—</span>
+            <div class="player-row">
+              <input type="range" class="player-seek" id="playerPanelSeek" min="0" max="100" value="0" title="进度">
+              <span class="player-time" id="playerPanelTime">00:00 / 00:00</span>
+            </div>
+            <div class="player-row">
+              <button class="player-btn-sm" id="btnPrev" title="上一首">⏮</button>
+              <button class="player-btn-sm" id="playerPanelToggle" onclick="App.togglePlay()" title="播放/暂停">▶</button>
+              <button class="player-btn-sm" id="btnNext" title="下一首">⏭</button>
+            </div>
+            <div class="player-extra-row">
+              <button class="player-btn-sm" id="btnVolumeIcon" title="静音/有声" onclick="App.toggleMute()">🔊</button>
+              <input type="range" class="volume-slider" id="playerPanelVolume" min="0" max="100" value="80" title="音量">
+              <button class="player-btn-sm" id="btnLoop" title="列表循环" onclick="App.toggleLoop()">🔁</button>
+              <button class="player-close-btn" onclick="App.closePlayer()" title="关闭播放器">✕</button>
+            </div>
+          </div>
+        </div>
+        <div class="editor-grid">
+          <div class="form-group">
+            <label>标题 Title</label>
+            <input type="text" id="tagTitle" placeholder="歌曲标题">
+          </div>
+          <div class="form-group">
+            <label>艺术家 Artist</label>
+            <input type="text" id="tagArtist" placeholder="艺术家">
+          </div>
+          <div class="form-group">
+            <label>专辑艺术家 Album Artist</label>
+            <input type="text" id="tagAlbumArtist" placeholder="专辑艺术家">
+          </div>
+          <div class="form-group">
+            <label>作曲 Composer</label>
+            <input type="text" id="tagComposer" placeholder="作曲者">
+          </div>
+          <div class="form-group">
+            <label>专辑 Album</label>
+            <input type="text" id="tagAlbum" placeholder="专辑">
+          </div>
+          <div class="form-group">
+            <label>年份 Year</label>
+            <input type="text" id="tagYear" placeholder="2024">
+          </div>
+          <div class="form-group">
+            <label>音轨号 Track</label>
+            <input type="text" id="tagTrack" placeholder="1/10">
+          </div>
+          <div class="form-group">
+            <label>碟号 Disc</label>
+            <input type="text" id="tagDisc" placeholder="1/2">
+          </div>
+          <div class="form-group">
+            <label>风格 Genre</label>
+            <input type="text" id="tagGenre" placeholder="Pop">
+          </div>
+          <div class="form-group">
+            <label>备注 Comment</label>
+            <input type="text" id="tagComment" placeholder="备注信息">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:6px">
+          <label>歌词 Lyrics</label>
+          <textarea id="tagLyrics" placeholder="歌词内容（支持 LRC 格式或纯文本）" rows="6" style="font-family:monospace;font-size:.8rem;resize:vertical;min-height:100px"></textarea>
+        </div>
+
+        <!-- Auto Search Section -->
+        <div class="search-section">
+          <div class="search-bar">
+            <input type="text" id="searchQuery" placeholder="输入歌名/艺术家自动搜索标签..." style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;color:var(--text-primary);font-size:.85rem;font-family:inherit;outline:none">
+            <select id="searchSource" style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text-primary);font-size:.85rem;font-family:inherit;flex-shrink:0">
+              <option value="both">全部来源</option>
+              <option value="netease">网易云</option>
+              <option value="qq">QQ音乐</option>
+              <option value="deezer">Deezer</option>
+            </select>
+            <button class="btn btn-primary" id="searchBtn" onclick="App.searchTag()">🔍 搜索</button>
+          </div>
+          <div class="search-results" id="searchResults"></div>
+        </div>
+
+        <!-- Actions -->
+      <div class="actions">
+        <!-- 行1：批量自动化（主操作） -->
+        <div class="btn-group">
+          <button class="btn" style="background:#2563EB;color:#fff;flex:11 1 0" onclick="App.batchSearchAndApply()" id="batchSearchBtn" title="对勾选的所有文件自动查询标签/封面/歌词并写入内存">🔍 一键查询并写入</button>
+        </div>
+        <!-- 行2：当前文件 -->
+        <div class="btn-group">
+          <button class="btn" style="background:#5B8CB8;color:#fff;flex:4 1 0" onclick="App.saveCurrent()" id="saveBtn" title="把当前编辑写入内存（Ctrl+S）">💾 保存编辑</button>
+          <button class="btn" style="background:#6BA08E;color:#fff;flex:4 1 0" onclick="App.downloadCurrent()" id="downloadBtn" title="自动保存后下载，一步到位">📥 保存并下载</button>
+        </div>
+        <!-- 行3：批量文件 -->
+        <div class="btn-group">
+          <button class="btn" style="background:#9A8CBF;color:#fff;flex:4 1 0" onclick="App.batchSave()" title="把所有勾选文件保存到内存">💾 批量保存</button>
+          <button class="btn" style="background:#E0A980;color:#fff;flex:4 1 0" onclick="App.batchDownload()" title="保存并下载所有勾选文件">📥 批量保存并下载</button>
+        </div>
+        <!-- 行4/5：批量重命名 -->
+        <div class="btn-group">
+          <button class="btn" style="background:#CF8E98;color:#fff;flex:11 1 0" onclick="App.batchRename('artist-title')" title="勾选文件下载名改为 歌手-歌曲">✏️ 批量重命名: 歌手-歌曲</button>
+        </div>
+        <div class="btn-group">
+          <button class="btn" style="background:#73A9AD;color:#fff;flex:11 1 0" onclick="App.batchRename('title-artist')" title="勾选文件下载名改为 歌曲-歌手">✏️ 批量重命名: 歌曲-歌手</button>
+        </div>
+      </div>
+
+        <!-- Music Player Bar -->
+        <div class="player-bar" id="playerBar" style="display:none">
+          <button class="player-btn" id="playToggle" title="播放/暂停">▶</button>
+          <span class="player-title" id="playTitle">—</span>
+          <input type="range" class="player-seek" id="playSeek" min="0" max="100" value="0">
+          <span class="player-time" id="playTime">00:00 / 00:00</span>
+          <button class="player-close" id="playClose" title="关闭">✕</button>
+          <audio id="playerAudio" preload="auto"></audio>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  ID3v2.3 Tag Reader / Writer  (browser-side, zero dependency)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ID3 = {};
+
+/**
+ * Read a synchsafe integer (4 bytes where each byte uses only 7 bits).
+ */
+ID3.readSynchSafe = function(view, offset) {
+  return (view.getUint8(offset)     << 21) |
+         (view.getUint8(offset + 1) << 14) |
+         (view.getUint8(offset + 2) << 7)  |
+         view.getUint8(offset + 3);
+};
+
+/**
+ * Write a synchsafe integer.
+ */
+ID3.writeSynchSafe = function(value) {
+  const buf = new Uint8Array(4);
+  buf[0] = (value >> 21) & 0x7f;
+  buf[1] = (value >> 14) & 0x7f;
+  buf[2] = (value >> 7)  & 0x7f;
+  buf[3] = value & 0x7f;
+  return buf;
+};
+
+/**
+ * Decode text from ID3v2 frame data.
+ * Strategy: try UTF-8 first (most common), then declared encoding, then fallbacks.
+ * This handles the common case where encoding byte is wrong but data is UTF-8.
+ */
+ID3.decodeText = function(data) {
+  if (!data || data.length === 0) return "";
+  const code = data[0];
+  let bytes = data.slice(1);
+  if (bytes.length === 0) return "";
+
+  // Some encoders prepend an extra 0x00 before a UTF-16 BOM — strip it
+  if (bytes.length >= 3 && bytes[0] === 0x00 &&
+      ((bytes[1] === 0xFF && bytes[2] === 0xFE) || (bytes[1] === 0xFE && bytes[2] === 0xFF))) {
+    bytes = bytes.slice(1);
+  }
+
+  // When encoding byte says UTF-16, trust it (avoid NUL-interleaved false UTF-8 decode)
+  // Also try both LE and BE — some encoders write BE data with LE encoding byte.
+  if (code === 0x01) {
+    try {
+      const leResult = new TextDecoder("utf-16").decode(bytes);
+      if (!leResult.includes("\0")) return leResult;
+      return new TextDecoder("utf-16be").decode(bytes);
+    } catch (e) {}
+  }
+  if (code === 0x02) {
+    try {
+      const beResult = new TextDecoder("utf-16be").decode(bytes);
+      if (!beResult.includes("\0")) return beResult;
+      return new TextDecoder("utf-16").decode(bytes);
+    } catch (e) {}
+  }
+
+  // Always try UTF-8 first — most modern MP3s use it regardless of encoding byte
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch (e) {}
+
+  // UTF-8 didn't work — try the declared encoding
+  try {
+    if (code === 0x03) return new TextDecoder("utf-8").decode(bytes);
+  } catch (e) {}
+
+  // Try Chinese encodings
+  try { return new TextDecoder("gbk", { fatal: true }).decode(bytes); } catch (e) {}
+  try { return new TextDecoder("big5", { fatal: true }).decode(bytes); } catch (e) {}
+
+  // Ultimate fallback: Latin-1 byte-by-byte
+  let str = "";
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  return str;
+};
+
+/**
+ * Encode text for ID3v2 frame using UTF-8 (encoding byte 0x03).
+ * Returns Uint8Array: [0x03, ...UTF-8 bytes].
+ */
+ID3.encodeText = function(text) {
+  const utf8 = new TextEncoder().encode(text || "");
+  const result = new Uint8Array(1 + utf8.length);
+  result[0] = 0x03; // UTF-8
+  result.set(utf8, 1);
+  return result;
+};
+
+/**
+ * Parse ID3v2 tags from an ArrayBuffer.
+ * Returns { frames: { TIT2: "Title", TPE1: "Artist", ... }, cover: { mime, data } | null }
+ * Returns null if no ID3v2 tag found.
+ */
+ID3.read = function(buffer) {
+  if (!buffer || buffer.byteLength < 10) return null;
+
+  const view = new DataView(buffer);
+  const data = new Uint8Array(buffer);
+
+  // Check ID3v2 signature
+  if (data[0] !== 0x49 || data[1] !== 0x44 || data[2] !== 0x33) {
+    return null; // "ID3"
+  }
+
+  const version = data[3];
+  if (version < 2 || version > 4) return null; // Only v2.2-v2.4
+
+  const flags = data[5];
+  const hasFooter = !!(flags & 0x10); // v2.4 footer flag
+  const hasExtended = !!(flags & 0x40); // Extended header present
+  const tagSize = ID3.readSynchSafe(view, 6);
+
+  let offset = 10; // After header
+
+  // Skip extended header if present (v2.3 and v2.4)
+  if (hasExtended) {
+    // Extended header: 4-byte synchsafe size (does NOT include these 4 bytes in v2.3)
+    const extSize = ID3.readSynchSafe(view, offset);
+    offset += 4;
+    if (version === 4) {
+      // In v2.4, size includes the 4 bytes we just read
+      offset += Math.max(0, extSize - 4);
+    } else {
+      offset += extSize;
+    }
+  }
+
+  const tagEnd = offset + tagSize;
+
+  const result = { frames: {}, cover: null, tagSize: tagSize + 10 + (hasFooter ? 10 : 0), version, _rawFrames: [] };
+
+  // Iterate frames
+  while (offset < tagEnd - 10) {
+    // v2.2 uses 3-byte frame IDs, v2.3/v2.4 use 4-byte
+    const frameId = version === 2
+      ? String.fromCharCode(data[offset], data[offset + 1], data[offset + 2])
+      : String.fromCharCode(data[offset], data[offset + 1], data[offset + 2], data[offset + 3]);
+
+    // Stop at padding (null frame ID)
+    if (frameId.charCodeAt(0) === 0) break;
+
+    let frameSize, frameFlags;
+
+    if (version === 2) {
+      // ID3v2.2: 3-byte frame ID (already read at offset..offset+2), 3-byte size at offset+3..offset+5
+      frameSize = (data[offset + 3] << 16) | (data[offset + 4] << 8) | data[offset + 5];
+      frameFlags = 0;
+      offset += 6; // Skip past 3-byte ID + 3-byte size
+    } else {
+      // ID3v2.3/2.4: 4-byte frame ID, 4-byte size, 2-byte flags (ID was read from bytes before offset)
+      frameSize = (version === 4)
+        ? ID3.readSynchSafe(view, offset + 4)
+        : view.getUint32(offset + 4);
+      frameFlags = view.getUint16(offset + 8);
+      offset += 10;
+    }
+
+    // Zero or negative size = skip
+    if (frameSize <= 0) break;
+
+    const frameData = data.slice(offset, offset + frameSize);
+    offset += frameSize;
+
+    // 保留原始帧副本：写入时对「未被管理的帧」原样透传，避免重写标签丢信息
+    if (frameId.length >= 3 && frameId.charCodeAt(0) !== 0) {
+      result._rawFrames.push({ id: frameId, data: frameData });
+    }
+
+    // Extract frame content
+    if (frameId === "APIC" || frameId === "PIC") {
+      // Attached picture
+      try {
+        const enc = frameData[0];
+        let pos = 1;
+
+        // MIME type
+        let mime = "";
+        while (pos < frameData.length && frameData[pos] !== 0) {
+          mime += String.fromCharCode(frameData[pos]);
+          pos++;
+        }
+        pos++; // Skip null
+
+        // Picture type (skip)
+        pos++; // picType = frameData[pos];
+
+        // Description
+        while (pos < frameData.length && frameData[pos] !== 0) pos++;
+        pos++; // Skip null
+
+        // Image data
+        const imgData = frameData.slice(pos);
+        result.cover = {
+          mime: mime || "image/jpeg",
+          data: imgData
+        };
+        // Preserve raw frame for lossless re-write
+        result._coverFrameData = frameData;
+      } catch (e) { /* ignore malformed APIC */ }
+    } else if (frameId === "TIT2" || frameId === "TT2") {
+      result.frames.title = ID3.decodeText(frameData);
+    } else if (frameId === "TPE1" || frameId === "TP1") {
+      result.frames.artist = ID3.decodeText(frameData);
+    } else if (frameId === "TALB" || frameId === "TAL") {
+      result.frames.album = ID3.decodeText(frameData);
+    } else if (frameId === "TYER" || frameId === "TYE" || frameId === "TDRC") {
+      result.frames.year = ID3.decodeText(frameData);
+    } else if (frameId === "TRCK" || frameId === "TRK") {
+      result.frames.track = ID3.decodeText(frameData);
+    } else if (frameId === "TCON" || frameId === "TCO") {
+      result.frames.genre = ID3.decodeText(frameData);
+    } else if (frameId === "COMM" || frameId === "COM") {
+      // COMM: encoding(1)+lang(3)+desc(null)+text
+      let descEnd = 4;
+      while (descEnd < frameData.length && frameData[descEnd] !== 0) descEnd++;
+      if (descEnd + 1 < frameData.length) {
+        result.frames.comment = ID3.decodeAny(frameData.slice(descEnd + 1));
+      }
+    } else if (frameId === "TPOS" || frameId === "TPA") {
+      result.frames.disc = ID3.decodeText(frameData);       // "1/2" format
+    } else if (frameId === "TCOM" || frameId === "TCM") {
+      result.frames.composer = ID3.decodeText(frameData);
+    } else if (frameId === "TPE2" || frameId === "TP2") {
+      result.frames.albumArtist = ID3.decodeText(frameData);
+    } else if (frameId === "USLT" || frameId === "ULT") {
+      // USLT: encoding(1)+lang(3)+desc(null)+lyrics
+      const encByte = frameData[0];
+      let descEnd = 4;
+      while (descEnd < frameData.length && frameData[descEnd] !== 0) descEnd++;
+      if (descEnd + 1 < frameData.length) {
+        result.frames.lyrics = ID3.decodeAny(frameData.slice(descEnd + 1), encByte);
+      }
+    } else if (frameId === "TXXX" || frameId === "TXX") {
+      // Custom text frame: encoding(1)+desc(null)+value
+      let dEnd = 1;
+      while (dEnd < frameData.length && frameData[dEnd] !== 0) dEnd++;
+      if (dEnd + 1 < frameData.length) {
+        const desc = ID3.decodeAny(frameData.slice(1, dEnd));
+        const val = ID3.decodeAny(frameData.slice(dEnd + 1));
+        if (desc.toUpperCase() === "LYRICS" || desc.toUpperCase() === "UNSYNCEDLYRICS") {
+          if (!result.frames.lyrics) result.frames.lyrics = val;
+        }
+      }
+    } else if (frameId === "SYLT") {
+      // Synchronized lyrics: skip timing and just extract text
+      // SYLT: encoding(1)+lang(3)+timestamp(1)+type(1)+count(4)+descriptor(null)+pairs...
+      // For now just signal presence
+      result.frames._hasSYLT = true;
+    }
+  }
+
+  return result;
+};
+
+/**
+ * Universal text decoder — tries UTF-8, detects BOM for UTF-16, then GBK/Big5/Latin-1.
+ * No reliance on encoding byte. Handles all real-world cases.
+ * @param {Uint8Array} bytes - Raw bytes to decode
+ * @param {number} [encByte] - Optional ID3 encoding byte (0x00=Latin1, 0x01=UTF16LE, 0x02=UTF16BE, 0x03=UTF8)
+ */
+ID3.decodeAny = function(bytes, encByte) {
+  if (!bytes || bytes.length === 0) return "";
+
+  // Some encoders prepend an extra 0x00 before a UTF-16 BOM — strip it
+  if (bytes.length >= 3 && bytes[0] === 0x00 &&
+      ((bytes[1] === 0xFF && bytes[2] === 0xFE) || (bytes[1] === 0xFE && bytes[2] === 0xFF))) {
+    bytes = bytes.slice(1);
+  }
+
+  // When encoding byte explicitly indicates UTF-16, try UTF-16 before UTF-8
+  // to avoid the "UTF-8 succeeds on NUL-interleaved UTF-16LE data" issue.
+  // Also try both LE and BE — some encoders write BE data with LE encoding byte.
+  if (encByte === 0x01) {
+    try {
+      if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE)
+        return new TextDecoder("utf-16").decode(bytes);
+      if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF)
+        return new TextDecoder("utf-16be").decode(bytes);
+      // No BOM: try LE first (per ID3v2 spec)
+      const leResult = new TextDecoder("utf-16").decode(bytes);
+      // Check if the result looks reasonable (not all CJK when the file title is English)
+      const hasNul = leResult.includes("\0");
+      if (!hasNul) return leResult;
+      // Has NUL interleaved - probably wrong endianness, try BE
+      return new TextDecoder("utf-16be").decode(bytes);
+    } catch (e) { /* fall through */ }
+  }
+  if (encByte === 0x02) {
+    try {
+      if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF)
+        return new TextDecoder("utf-16be").decode(bytes);
+      if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE)
+        return new TextDecoder("utf-16").decode(bytes);
+      // No BOM: try BE first
+      const beResult = new TextDecoder("utf-16be").decode(bytes);
+      const hasNul = beResult.includes("\0");
+      if (!hasNul) return beResult;
+      return new TextDecoder("utf-16").decode(bytes);
+    } catch (e) { /* fall through */ }
+  }
+
+  // Default: UTF-8 first (covers most modern MP3s regardless of wrong encoding byte),
+  // then BOM detection, then Chinese encodings, then Latin-1 fallback
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch (e) {}
+  if (bytes.length >= 2) {
+    if (bytes[0] === 0xFF && bytes[1] === 0xFE) return new TextDecoder("utf-16").decode(bytes);
+    if (bytes[0] === 0xFE && bytes[1] === 0xFF) return new TextDecoder("utf-16be").decode(bytes);
+  }
+  try { return new TextDecoder("gbk", { fatal: true }).decode(bytes); } catch (e) {}
+  try { return new TextDecoder("big5", { fatal: true }).decode(bytes); } catch (e) {}
+  let str2 = "";
+  for (let i = 0; i < bytes.length; i++) str2 += String.fromCharCode(bytes[i]);
+  return str2;
+};
+
+/**
+ * ID3v2.2 三字节帧 ID → ID3v2.3 四字节帧 ID 映射。
+ * 用于写入(v2.3)时把老帧号的原始帧正确透传。
+ */
+ID3._v22Map = {
+  TT2: "TIT2", TP1: "TPE1", TP2: "TPE2", TCM: "TCOM", TAL: "TALB",
+  TYE: "TYER", TRK: "TRCK", TPA: "TPOS", TCO: "TCON", COM: "COMM",
+  ULT: "USLT", TXX: "TXXX", PIC: "APIC",
+};
+
+/** 已被本编辑器重建/管理的帧 ID —— 这些不参与透传，避免重复 */
+ID3._managedFrameIds = ["TIT2","TPE1","TPE2","TCOM","TALB","TYER","TDRC","TRCK",
+  "TPOS","TCON","COMM","USLT","APIC","PIC"];
+
+/**
+ * Write ID3v2.3 tags to an ArrayBuffer.
+ * @param {ArrayBuffer} buffer - Original file buffer
+ * @param {object} tags - { title, artist, album, year, track, genre, comment }
+ * @param {object} originalId3 - Result from ID3.read() to get original tag size
+ * @returns {ArrayBuffer} - New buffer with updated ID3 tag
+ */
+ID3.write = function(buffer, tags, originalId3) {
+  const data = new Uint8Array(buffer);
+
+  // Collect frames to write
+  const frames = [];
+  if (tags.title)       frames.push(ID3._makeFrame("TIT2", tags.title));
+  if (tags.artist)      frames.push(ID3._makeFrame("TPE1", tags.artist));
+  if (tags.albumArtist) frames.push(ID3._makeFrame("TPE2", tags.albumArtist));
+  if (tags.composer)    frames.push(ID3._makeFrame("TCOM", tags.composer));
+  if (tags.album)       frames.push(ID3._makeFrame("TALB", tags.album));
+  if (tags.year)        frames.push(ID3._makeFrame("TYER", tags.year));
+  if (tags.track)       frames.push(ID3._makeFrame("TRCK", tags.track));
+  if (tags.disc)        frames.push(ID3._makeFrame("TPOS", tags.disc));
+  if (tags.genre)       frames.push(ID3._makeFrame("TCON", tags.genre));
+  if (tags.comment)     frames.push(ID3._makeFrame("COMM", tags.comment));
+  if (tags.lyrics)      frames.push(ID3._makeLyricsFrame("USLT", tags.lyrics));
+
+  // Cover art: use new cover if provided, otherwise passthrough original
+  if (tags._newCover) {
+    // New cover provided as { mime, data: Uint8Array }
+    frames.push(ID3._makeCoverFrame("APIC", tags._newCover.mime, tags._newCover.data));
+  } else if (tags._removeCover) {
+    // Explicitly removed cover — don't include APIC frame
+  } else if (originalId3 && originalId3._coverFrameData && originalId3.version >= 3) {
+    // Passthrough original cover (v2.3+ APIC format)
+    frames.push(ID3._wrapRawFrame("APIC", originalId3._coverFrameData));
+  } else if (originalId3 && originalId3._coverFrameData && originalId3.version < 3) {
+    // v2.2 PIC → convert to v2.3 APIC: map 3-byte MIME to standard format
+    const picData = originalId3._coverFrameData;
+    if (picData.length >= 5) {
+      const mime3 = String.fromCharCode(picData[1], picData[2], picData[3]);
+      const mimeFull = mime3 === "JPG" ? "image/jpeg" : mime3 === "PNG" ? "image/png" : "image/jpeg";
+      let descEnd = 5;
+      while (descEnd < picData.length && picData[descEnd] !== 0) descEnd++;
+      const imgData = picData.slice(descEnd + 1);
+      if (imgData.length > 0) {
+        frames.push(ID3._makeCoverFrame("APIC", mimeFull, imgData));
+      }
+    }
+  }
+
+  // 透传未被管理的原始帧：保留 PRIV/GEOB/POPM/TBPM/WOAR 等本编辑器未处理的标签，
+  // 避免「保存一次 → 原文件信息被清空」。v2.2 三字节帧号按映射表转 v2.3。
+  // 注意：TDRC(v2.4 日期)属被管理帧，其语义由 v2.3 的 TYER 承载，不透传以免重复。
+  if (originalId3 && originalId3._rawFrames) {
+    const managed = new Set(ID3._managedFrameIds);
+    for (const rf of originalId3._rawFrames) {
+      let fid = rf.id;
+      if (fid.length === 3) fid = ID3._v22Map[fid] || "";
+      if (fid.length !== 4) continue;          // 无法映射的老帧号 → 丢弃（防止结构损坏）
+      if (managed.has(fid) || managed.has(rf.id)) continue; // 已被重建 → 不重复
+      try {
+        frames.push(ID3._wrapRawFrame(fid, rf.data));
+      } catch (e) { /* 单帧透传失败不影响整体 */ }
+    }
+  }
+
+  // Calculate total frame size
+  let framesSize = 0;
+  for (const f of frames) framesSize += f.length;
+
+  // Add 1024 bytes padding
+  const paddingSize = 1024;
+  const tagBodySize = framesSize + paddingSize;
+
+  // Create ID3v2.3 header (10 bytes)
+  const header = new Uint8Array(10);
+  header[0] = 0x49; header[1] = 0x44; header[2] = 0x33; // "ID3"
+  header[3] = 0x03; header[4] = 0x00; // Version 2.3
+  header[5] = 0x00; // Flags
+  const sizeBytes = ID3.writeSynchSafe(tagBodySize);
+  header.set(sizeBytes, 6);
+
+  // Build new tag
+  const newTag = new Uint8Array(10 + framesSize + paddingSize);
+  newTag.set(header, 0);
+  let pos = 10;
+  for (const f of frames) {
+    newTag.set(f, pos);
+    pos += f.length;
+  }
+  // Padding (zeros)
+  for (let i = pos; i < newTag.length; i++) newTag[i] = 0;
+
+  // Determine audio start
+  let audioStart = 0;
+  if (originalId3 && originalId3.tagSize > 0) {
+    audioStart = originalId3.tagSize;
+  }
+
+  const audioData = data.slice(audioStart);
+  const result = new Uint8Array(newTag.length + audioData.length);
+  result.set(newTag);
+  result.set(audioData, newTag.length);
+
+  return result.buffer;
+};
+
+/**
+ * Make a single ID3v2.3 frame (10-byte header + body).
+ */
+ID3._makeFrame = function(id, value) {
+  const body = ID3.encodeText(value);
+  // For COMM frame, prepend language + description (no extra encoding byte in text)
+  let frameBody;
+  if (id === "COMM") {
+    // encoding(1) + "eng"(3) + null-short-desc(1) + raw UTF-8 text
+    const utf8 = new TextEncoder().encode(value || "");
+    frameBody = new Uint8Array(5 + utf8.length);
+    frameBody[0] = 0x03; // UTF-8 encoding
+    frameBody[1] = 0x65; frameBody[2] = 0x6e; frameBody[3] = 0x67; // "eng"
+    frameBody[4] = 0x00; // empty short description
+    frameBody.set(utf8, 5);
+  } else {
+    frameBody = body;
+  }
+
+  const frame = new Uint8Array(10 + frameBody.length);
+  // Frame ID
+  for (let i = 0; i < 4; i++) frame[i] = id.charCodeAt(i);
+  // Size (not synchsafe for v2.3)
+  const size = frameBody.length;
+  frame[4] = (size >> 24) & 0xff;
+  frame[5] = (size >> 16) & 0xff;
+  frame[6] = (size >> 8)  & 0xff;
+  frame[7] = size & 0xff;
+  // Flags = 0
+  frame[8] = 0; frame[9] = 0;
+  // Body
+  frame.set(frameBody, 10);
+
+  return frame;
+};
+
+/**
+ * Wrap raw frame data (from previously parsed frame) into a full frame
+ * with 10-byte header. Used for passthrough of cover art and other binary frames.
+ */
+ID3._wrapRawFrame = function(id, rawData) {
+  const frame = new Uint8Array(10 + rawData.length);
+  for (let i = 0; i < 4; i++) frame[i] = id.charCodeAt(i);
+  const size = rawData.length;
+  frame[4] = (size >> 24) & 0xff;
+  frame[5] = (size >> 16) & 0xff;
+  frame[6] = (size >> 8)  & 0xff;
+  frame[7] = size & 0xff;
+  frame[8] = 0; frame[9] = 0;
+  frame.set(rawData, 10);
+  return frame;
+};
+
+/**
+ * Build a USLT (lyrics) frame.
+ * Format: encoding(1) + "eng"(3) + short_desc(1+null) + lyrics
+ * Unlike COMM, USLT text area does not have its own encoding byte.
+ */
+ID3._makeLyricsFrame = function(id, text) {
+  const utf8 = new TextEncoder().encode(text || "");
+  // encoding(1) + language(3) + null desc(1) + utf8 lyrics
+  const frameBody = new Uint8Array(5 + utf8.length);
+  frameBody[0] = 0x03; // UTF-8
+  frameBody[1] = 0x65; frameBody[2] = 0x6e; frameBody[3] = 0x67; // "eng"
+  frameBody[4] = 0x00; // empty content descriptor
+  frameBody.set(utf8, 5);
+
+  const frame = new Uint8Array(10 + frameBody.length);
+  for (let i = 0; i < 4; i++) frame[i] = id.charCodeAt(i);
+  const size = frameBody.length;
+  frame[4] = (size >> 24) & 0xff;
+  frame[5] = (size >> 16) & 0xff;
+  frame[6] = (size >> 8)  & 0xff;
+  frame[7] = size & 0xff;
+  frame[8] = 0; frame[9] = 0;
+  frame.set(frameBody, 10);
+  return frame;
+};
+
+/**
+ * Build an APIC (cover art) frame from raw image data.
+ * Format: encoding(0x03=UTF8) + mimeType(null) + picType(0x03=cover) + desc(null) + imageBytes
+ */
+ID3._makeCoverFrame = function(id, mimeType, imageData) {
+  const mimeBytes = new TextEncoder().encode(mimeType || "image/jpeg");
+  const imgBytes = imageData instanceof Uint8Array ? imageData : new Uint8Array(imageData);
+  const frameBody = new Uint8Array(1 + mimeBytes.length + 1 + 1 + 1 + imgBytes.length);
+  let pos = 0;
+  frameBody[pos++] = 0x03; // UTF-8 encoding byte
+  frameBody.set(mimeBytes, pos); pos += mimeBytes.length;
+  frameBody[pos++] = 0x00; // null terminator
+  frameBody[pos++] = 0x03; // picture type: Cover (front)
+  frameBody[pos++] = 0x00; // empty description (null)
+  frameBody.set(imgBytes, pos);
+
+  const frame = new Uint8Array(10 + frameBody.length);
+  for (let i = 0; i < 4; i++) frame[i] = id.charCodeAt(i);
+  const size = frameBody.length;
+  frame[4] = (size >> 24) & 0xff;
+  frame[5] = (size >> 16) & 0xff;
+  frame[6] = (size >> 8)  & 0xff;
+  frame[7] = size & 0xff;
+  frame[8] = 0; frame[9] = 0;
+  frame.set(frameBody, 10);
+  return frame;
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  FLAC Vorbis Comment Reader / Writer (browser-side)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const FLAC = {};
+
+FLAC.read = function(buffer) {
+  if (!buffer || buffer.byteLength < 8) return null;
+  const data = new Uint8Array(buffer);
+  if (String.fromCharCode(data[0], data[1], data[2], data[3]) !== "fLaC") return null;
+
+  FLAC._lastPicture = null; // Reset
+  let offset = 4, lastBlock = false, blocks = [], vc = null, streamInfo = null;
+  while (!lastBlock && offset + 4 <= data.length) {
+    const h = data[offset], isLast = !!(h & 0x80), type = h & 0x7f;
+    const sz = (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+    const start = offset; offset += 4;
+    if (sz <= 0 || offset + sz > data.length) break;
+    blocks.push({ type, start, size: 4 + sz, lastBlock: isLast });
+    if (type === 0 && sz >= 18) { // STREAMINFO — extract audio properties
+      const raw = data.slice(offset, offset + sz);
+      const sampleRate = (raw[10] << 12) | (raw[11] << 4) | (raw[12] >>> 4);
+      const channels = ((raw[12] & 0x0E) >>> 1) + 1;
+      const bitDepth = ((raw[12] & 0x01) << 4) | (raw[13] >>> 4) + 1;
+      streamInfo = { sampleRate, channels, bitDepth };
+    }
+    if (type === 4) vc = FLAC._parseVC(data, offset, sz, blocks, start);
+    if (type === 6) { // PICTURE block
+      FLAC._parsePicture(data, offset, sz);
+      blocks[blocks.length - 1]._isPicture = true;
+    }
+    offset += sz; lastBlock = isLast;
+  }
+  // CRITICAL: Preserve audio frame data that follows the last metadata block
+  const audioData = offset < data.length ? data.slice(offset) : null;
+  if (!vc) return { blocks, metadata: {}, cover: FLAC._lastPicture, isFLAC: true, audioData, streamInfo };
+  const metadata = {};
+  for (const f of vc.fields) {
+    const eq = f.indexOf("="); if (eq < 0) continue;
+    const k = f.slice(0, eq).toUpperCase(), v = f.slice(eq + 1);
+    const map = { TITLE: "title", ARTIST: "artist", ALBUMARTIST: "albumArtist", ALBUM: "album",
+      DATE: "year", YEAR: "year", TRACKNUMBER: "track", DISCNUMBER: "disc", GENRE: "genre",
+      COMPOSER: "composer", COMMENT: "comment", LYRICS: "lyrics" };
+    if (map[k]) metadata[map[k]] = v;
+  }
+  return { blocks, metadata, vorbisComment: vc, cover: FLAC._lastPicture, isFLAC: true, audioData, streamInfo };
+};
+
+FLAC._parseVC = function(data, offset, sz, blocks, blockStart) {
+  const v = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let p = offset, vendorLen = v.getUint32(p, true); p += 4;
+  const vendor = new TextDecoder("utf-8").decode(data.slice(p, p + vendorLen)); p += vendorLen;
+  const count = v.getUint32(p, true); p += 4;
+  const fields = [];
+  for (let i = 0; i < count; i++) {
+    const len = v.getUint32(p, true); p += 4;
+    fields.push(new TextDecoder("utf-8", { fatal: true }).decode(data.slice(p, p + len))); p += len;
+  }
+  return { vendor, count, fields, blockIndex: blocks.length - 1, blockStart, blockSize: 4 + sz, rawStart: offset };
+};
+
+/** Parse FLAC PICTURE metadata block to extract cover art */
+FLAC._parsePicture = function(data, offset, size) {
+  try {
+    let p = offset;
+    const type = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    const mimeLen = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    const mime = new TextDecoder("utf-8").decode(data.slice(p, p + mimeLen)); p += mimeLen;
+    const descLen = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    p += descLen; // Skip description
+    const width = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    const height = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    const depth = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    const colors = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    const picLen = (data[p] << 24) | (data[p + 1] << 16) | (data[p + 2] << 8) | data[p + 3]; p += 4;
+    const picData = data.slice(p, p + picLen);
+    FLAC._lastPicture = { mime: mime || "image/jpeg", data: picData, width, height };
+  } catch (e) { FLAC._lastPicture = null; }
+};
+
+FLAC.write = function(buffer, tags, flacInfo) {
+  if (!flacInfo || !flacInfo.vorbisComment) return buffer;
+  const data = new Uint8Array(buffer), vc = flacInfo.vorbisComment, blocks = flacInfo.blocks;
+
+  // Build new Vorbis Comment block
+  const comments = [];
+  const addC = (k, v) => { if (v) comments.push(k + "=" + v); };
+  addC("TITLE", tags.title); addC("ARTIST", tags.artist); addC("ALBUMARTIST", tags.albumArtist);
+  addC("ALBUM", tags.album); addC("DATE", tags.year); addC("TRACKNUMBER", tags.track);
+  addC("DISCNUMBER", tags.disc); addC("GENRE", tags.genre); addC("COMPOSER", tags.composer);
+  addC("COMMENT", tags.comment); addC("LYRICS", tags.lyrics);
+  const managed = ["TITLE","ARTIST","ALBUMARTIST","ALBUM","DATE","YEAR","TRACKNUMBER","DISCNUMBER","GENRE","COMPOSER","COMMENT","LYRICS"];
+  for (const f of vc.fields) if (!managed.includes(f.split("=")[0])) comments.push(f);
+  const vendorBytes = new TextEncoder().encode(vc.vendor || "reference libFLAC 1.3.2 20170101");
+  const cbs = comments.map(c => new TextEncoder().encode(c));
+  let vcSz = 4 + vendorBytes.length + 4; for (const cb of cbs) vcSz += 4 + cb.length;
+  const vcBlock = new Uint8Array(4 + vcSz), dvVC = new DataView(vcBlock.buffer);
+  vcBlock[0] = 0x04; vcBlock[1] = (vcSz >> 16) & 0xff; vcBlock[2] = (vcSz >> 8) & 0xff; vcBlock[3] = vcSz & 0xff;
+  let vp = 4; dvVC.setUint32(vp, vendorBytes.length, true); vp += 4;
+  vcBlock.set(vendorBytes, vp); vp += vendorBytes.length;
+  dvVC.setUint32(vp, comments.length, true); vp += 4;
+  for (const cb of cbs) { dvVC.setUint32(vp, cb.length, true); vp += 4; vcBlock.set(cb, vp); vp += cb.length; }
+
+  // Build PICTURE block if cover is provided
+  let picBlock = null;
+  const cov = tags._newCover;
+  if (cov && cov.data && cov.data.length > 0) {
+    const mimeB = new TextEncoder().encode(cov.mime || "image/jpeg");
+    const imgD = cov.data instanceof Uint8Array ? cov.data : new Uint8Array(cov.data);
+    const picSz = 4+4+mimeB.length+4+0+4+4+4+4+4+imgD.length;
+    picBlock = new Uint8Array(4 + picSz);
+    const dvP = new DataView(picBlock.buffer);
+    picBlock[0] = 0x06; picBlock[1] = (picSz>>16)&0xff; picBlock[2] = (picSz>>8)&0xff; picBlock[3] = picSz&0xff;
+    let pp = 4;
+    dvP.setUint32(pp, 3, false); pp += 4;
+    dvP.setUint32(pp, mimeB.length, false); pp += 4; picBlock.set(mimeB, pp); pp += mimeB.length;
+    dvP.setUint32(pp, 0, false); pp += 4;
+    dvP.setUint32(pp, 0, false); pp += 4;
+    dvP.setUint32(pp, 0, false); pp += 4;
+    dvP.setUint32(pp, 24, false); pp += 4;
+    dvP.setUint32(pp, 0, false); pp += 4;
+    dvP.setUint32(pp, imgD.length, false); pp += 4;
+    picBlock.set(imgD, pp);
+  }
+
+  // Determine intent: keep existing cover, replace, or remove
+  const keepCover = !tags._removeCover && !tags._newCover;
+
+  // Assemble: replace old VC + PICTURE blocks with new ones
+  const parts = [];
+  let replaced = false;
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    const isVCBlock = (i === vc.blockIndex);
+    const isPicBlock = (b.type === 6 || b._isPicture);
+
+    if (isVCBlock) {
+      // Replace old Vorbis Comment with new one
+      if (!replaced) {
+        parts.push(vcBlock);
+        // Insert new PICTURE block right after VC
+        if (picBlock) parts.push(picBlock);
+        replaced = true;
+      }
+      continue; // Skip old VC block
+    }
+
+    if (isPicBlock) {
+      if (keepCover && !replaced) {
+        // Keep old PICTURE block as-is (no VC change yet — keepCover + VC at different index)
+        parts.push(data.slice(b.start, b.start + b.size));
+      } else if (keepCover && replaced) {
+        // Already replaced VC, but keepCover → keep old picture
+        parts.push(data.slice(b.start, b.start + b.size));
+      }
+      // else (_removeCover or _newCover): skip old PICTURE (it's already been replaced above)
+      continue;
+    }
+
+    // Keep all other blocks
+    parts.push(data.slice(b.start, b.start + b.size));
+  }
+  // If replaced is still false (shouldn't happen), add at end
+  if (!replaced) {
+    parts.push(vcBlock);
+    if (picBlock) parts.push(picBlock);
+  }
+
+  // Reset all last-block flags, then set on the actual last block
+  for (let p = 0; p < parts.length; p++) {
+    parts[p][0] &= 0x7F; // Clear last-block bit
+  }
+  if (parts.length > 0) {
+    parts[parts.length - 1][0] |= 0x80; // Set on last block
+  }
+
+  // Assemble final buffer — fLaC marker + metadata blocks + audio frames
+  // CRITICAL: must include "fLaC" magic bytes, otherwise FLAC.read() fails
+  // and the file is unplayable (media players require this marker)
+  const fLaC = new Uint8Array([0x66, 0x4C, 0x61, 0x43]); // "fLaC"
+  const total = 4 + parts.reduce((s, p) => s + p.length, 0) + (flacInfo.audioData ? flacInfo.audioData.length : 0);
+  const result = new Uint8Array(total);
+  let rp = 0;
+  result.set(fLaC, rp); rp += 4;
+  for (const p of parts) { result.set(p, rp); rp += p.length; }
+  // Append audio frame data (CRITICAL: without this the FLAC file has no sound)
+  if (flacInfo.audioData && flacInfo.audioData.length > 0) {
+    result.set(flacInfo.audioData, rp);
+  }
+  return result.buffer;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  WAV (RIFF) Tag Reader / Writer (browser-side)
+//  标签存放在 LIST/INFO 子块（INAM/IART/IPRD/ICRD/IGNR/ITRK/ICMT）
+// ═══════════════════════════════════════════════════════════════════════════
+
+const WAV = {};
+
+const WAV_INFO_MAP = {
+  INAM: "title", IART: "artist", IPRD: "album", ICRD: "year",
+  IGNR: "genre", ITRK: "track", IPRT: "track", ICMT: "comment",
+  ICOP: "copyright", ISFT: "encoder", ILYR: "lyrics", // ILYR 为非标准但广泛支持（foobar2000/千千静听）
+};
+
+WAV.read = function(buffer) {
+  if (!buffer || buffer.byteLength < 12) return null;
+  const data = new Uint8Array(buffer);
+  const rd32 = (o) => (data[o] | (data[o + 1] << 8) | (data[o + 2] << 16) | (data[o + 3] << 24)) >>> 0;
+  // "RIFF" ... "WAVE"
+  if (data[0] !== 0x52 || data[1] !== 0x49 || data[2] !== 0x46 || data[3] !== 0x46) return null;
+  if (data[8] !== 0x57 || data[9] !== 0x41 || data[10] !== 0x56 || data[11] !== 0x45) return null;
+
+  const metadata = {};
+  const chunks = [];
+  let offset = 12;
+  while (offset + 8 <= data.length) {
+    const id = String.fromCharCode(data[offset], data[offset + 1], data[offset + 2], data[offset + 3]);
+    const size = rd32(offset + 4);
+    if (size < 0 || offset + 8 + size > data.length) break; // 截断保护
+    const body = offset + 8;
+    chunks.push({ id, offset, size, body });
+    if (id === "LIST" && data[body] === 0x49 && data[body + 1] === 0x4E &&
+        data[body + 2] === 0x46 && data[body + 3] === 0x4F) {
+      let p = body + 4;
+      const end = body + size;
+      while (p + 8 <= end) {
+        const sid = String.fromCharCode(data[p], data[p + 1], data[p + 2], data[p + 3]);
+        const ssz = rd32(p + 4);
+        if (p + 8 + ssz > end) break;
+        const text = new TextDecoder("utf-8").decode(data.slice(p + 8, p + 8 + ssz)).replace(/\0+$/, "");
+        const key = WAV_INFO_MAP[sid];
+        if (key && !metadata[key]) metadata[key] = text;
+        p += 8 + ssz + (ssz & 1); // RIFF chunk 需 2 字节对齐
+      }
+    }
+    offset = body + size + (size & 1);
+  }
+  for (const k of ["title","artist","album","albumArtist","composer","year","track","disc","genre","comment","lyrics"]) {
+    if (metadata[k] === undefined) metadata[k] = "";
+  }
+  return { isWAV: true, metadata, chunks, audioInfo: null };
+};
+
+WAV.write = function(buffer, tags, wavInfo) {
+  const data = new Uint8Array(buffer);
+  const s = (t) => { const b = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) b[i] = t.charCodeAt(i); return b; };
+  const u32 = (v) => new Uint8Array([v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]);
+  const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let q = 0; for (const x of a) { o.set(x, q); q += x.length; } return o; };
+
+  // 1. 构建新 LIST/INFO 块
+  const rev = { title: "INAM", artist: "IART", album: "IPRD", year: "ICRD",
+                genre: "IGNR", track: "ITRK", comment: "ICMT", lyrics: "ILYR" };
+  const subs = [];
+  for (const key of Object.keys(rev)) {
+    const val = tags[key];
+    if (!val) continue;
+    const txt = new TextEncoder().encode(String(val) + "\0");
+    const pad = (txt.length & 1) ? new Uint8Array([0]) : new Uint8Array(0);
+    subs.push(cat(s(rev[key]), u32(txt.length), txt, pad));
+  }
+  let newInfo = null;
+  if (subs.length) {
+    const inner = cat(s("INFO"), ...subs);
+    newInfo = cat(s("LIST"), u32(inner.length), inner);
+    // LIST 自身 size 为奇数时补 1 字节对齐
+    if (inner.length & 1) newInfo = cat(newInfo, new Uint8Array([0]));
+  }
+
+  // 2. 保留所有非 LIST-INFO 的原始 chunk（原样拷贝，含 pad）
+  const keep = [];
+  if (wavInfo && wavInfo.chunks) {
+    for (const c of wavInfo.chunks) {
+      if (c.id === "LIST" && data[c.body] === 0x49 && data[c.body + 1] === 0x4E &&
+          data[c.body + 2] === 0x46 && data[c.body + 3] === 0x4F) continue; // 丢弃旧 INFO
+      const total = 8 + c.size + (c.size & 1);
+      keep.push(data.slice(c.offset, c.offset + total));
+    }
+  }
+
+  // 3. 重组：WAVE + 新INFO + 原chunks（音频数据原样保留）
+  const parts = [s("WAVE")];
+  if (newInfo) parts.push(newInfo);
+  for (const k of keep) parts.push(k);
+  const body = cat(...parts);
+  return cat(s("RIFF"), u32(body.length), body).buffer;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  M4A / MP4 Tag Reader / Writer (browser-side)
+//  标签存放在 moov/udta/meta/ilst 下的 ©nam/©ART/©alb/©day/©gen/aART/©lyr 等
+//  每个 item 内含一个 data box（ver/flags=1 表示 UTF-8 文本）
+// ═══════════════════════════════════════════════════════════════════════════
+
+const M4A = {};
+
+const M4A_TAG_MAP = {
+  "\u00a9nam": "title", "\u00a9ART": "artist", "\u00a9alb": "album",
+  "\u00a9day": "year", "\u00a9gen": "genre", "\u00a9wrt": "composer",
+  "\u00a9cmt": "comment", "aART": "albumArtist", "\u00a9lyr": "lyrics",
+  "\u00a9too": "encoder",
+};
+
+M4A._boxType = function(data, o) {
+  return String.fromCharCode(data[o], data[o + 1], data[o + 2], data[o + 3]);
+};
+M4A._boxSize = function(data, o) {
+  return ((data[o] << 24) | (data[o + 1] << 16) | (data[o + 2] << 8) | data[o + 3]) >>> 0;
+};
+
+M4A.read = function(buffer) {
+  if (!buffer || buffer.byteLength < 12) return null;
+  const data = new Uint8Array(buffer);
+  if (M4A._boxType(data, 4) !== "ftyp") return null; // MP4 必须以 ftyp 开头
+
+  const metadata = {};
+  const result = { isM4A: true, metadata, ilstOffset: 0, ilstSize: 0, ancestors: [] };
+
+  // 递归扫描容器 box，定位 ilst 并记录祖先链（用于写入时回填 size）
+  const walk = (start, end, ancestors) => {
+    let off = start;
+    while (off + 8 <= end) {
+      const size = M4A._boxSize(data, off);
+      const t = M4A._boxType(data, off + 4);
+      if (size < 8 || off + size > end) break;
+      if (t === "moov" || t === "udta" || t === "meta" || t === "ilst") {
+        const chain = ancestors.concat([{ offset: off, size }]);
+        if (t === "ilst") {
+          result.ilstOffset = off;
+          result.ilstSize = size;
+          result.ancestors = chain;
+          // 解析 ilst 内的 item
+          let p = off + 8;
+          const iend = off + size;
+          while (p + 8 <= iend) {
+            const isz = M4A._boxSize(data, p);
+            const it = M4A._boxType(data, p + 4);
+            if (isz < 8 || p + isz > iend) break;
+            const key = M4A_TAG_MAP[it];
+            if (key) {
+              // item 内含 data box：header(8) + ver/flags(4) + type(4) + locale(4) + value
+              const dOff = p + 8;
+              if (M4A._boxType(data, dOff + 4) === "data") {
+                const dSize = M4A._boxSize(data, dOff);
+                // data box: size(4)+'data'(4)+version(1)+flags(3=wellKnown)+locale(4)+value
+                const wellKnown = (data[dOff + 9] << 16) | (data[dOff + 10] << 8) | data[dOff + 11];
+                if (dSize >= 16 && wellKnown === 1) { // 1 = UTF-8 text
+                  const txt = new TextDecoder("utf-8")
+                    .decode(data.slice(dOff + 16, dOff + dSize)).replace(/\0+$/, "");
+                  if (txt && !metadata[key]) metadata[key] = txt;
+                }
+              }
+            }
+            p += isz;
+          }
+        } else {
+          // meta 有 4 字节 version/flags 前缀；moov/udta 直接是子 box
+          walk(t === "meta" ? off + 12 : off + 8, off + size, chain);
+        }
+      }
+      off += size;
+    }
+  };
+  walk(0, data.length, []);
+
+  // 没有 ilst 也不算有效 M4A（元数据区不存在）
+  if (result.ilstOffset === 0) return null;
+  for (const k of ["title","artist","album","albumArtist","composer","year","track","disc","genre","comment","lyrics"]) {
+    if (metadata[k] === undefined) metadata[k] = "";
+  }
+  return result;
+};
+
+M4A.write = function(buffer, tags, m4aInfo) {
+  const data = new Uint8Array(buffer);
+  const s = (t) => { const b = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) b[i] = t.charCodeAt(i); return b; };
+  const u32 = (v) => new Uint8Array([(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]);
+  const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let q = 0; for (const x of a) { o.set(x, q); q += x.length; } return o; };
+
+  // 1. 构建新 ilst
+  const rev = { title: "\u00a9nam", artist: "\u00a9ART", album: "\u00a9alb", year: "\u00a9day",
+                genre: "\u00a9gen", composer: "\u00a9wrt", comment: "\u00a9cmt",
+                albumArtist: "aART", lyrics: "\u00a9lyr" };
+  const items = [];
+  for (const key of Object.keys(rev)) {
+    const val = tags[key];
+    if (!val) continue;
+    const txt = new TextEncoder().encode(String(val));
+    // data box: size + "data" + version(1)+flags(3=wellKnown=1 UTF8) + locale(4) + value
+    const dataBox = cat(u32(16 + txt.length), s("data"), new Uint8Array([0, 0, 0, 1]), new Uint8Array(4), txt);
+    items.push(cat(u32(8 + dataBox.length), s(rev[key]), dataBox));
+  }
+  const inner = cat(...items);
+  const newIlst = cat(u32(8 + inner.length), s("ilst"), inner);
+
+  // 2. 原文件没有 ilst → 无法安全插入（需重建 moov），直接返回原 buffer
+  if (!m4aInfo || m4aInfo.ilstOffset === 0) return buffer;
+  const oldOff = m4aInfo.ilstOffset, oldSize = m4aInfo.ilstSize;
+  const delta = newIlst.length - oldSize;
+
+  // 3. 替换 ilst（ilst 之前的字节不变，祖先 offset 均不受影响）
+  let out = cat(data.slice(0, oldOff), newIlst, data.slice(oldOff + oldSize));
+
+  // 4. 回填祖先 box 的 size（从内到外累加 delta）。
+  //    注意跳过 ilst 自身：它的新 size 在构建时已写对，再 +delta 会错。
+  for (let i = m4aInfo.ancestors.length - 1; i >= 0; i--) {
+    const a = m4aInfo.ancestors[i];
+    if (a.offset === oldOff) continue;
+    const cur = ((out[a.offset] << 24) | (out[a.offset + 1] << 16) | (out[a.offset + 2] << 8) | out[a.offset + 3]) >>> 0;
+    const nv = (cur + delta) >>> 0;
+    out[a.offset] = (nv >>> 24) & 255; out[a.offset + 1] = (nv >>> 16) & 255;
+    out[a.offset + 2] = (nv >>> 8) & 255; out[a.offset + 3] = nv & 255;
+  }
+  return out.buffer;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  OGG Vorbis Tag Reader / Writer (browser-side)
+//  标签在 comment header packet（packet_type=0x03 + "vorbis" + vendor + comments）
+//  写入时重建该 page（含 CRC32），音频 page 原样保留并重排 sequence
+// ═══════════════════════════════════════════════════════════════════════════
+
+const OGG = {};
+
+// OGG CRC-32（poly 0x04c11db7，非反射）
+OGG._crcTable = (function () {
+  const t = [];
+  for (let i = 0; i < 256; i++) {
+    let r = i << 24;
+    for (let j = 0; j < 8; j++) r = (r & 0x80000000) ? ((r << 1) ^ 0x04c11db7) : (r << 1);
+    t.push(r >>> 0);
+  }
+  return t;
+})();
+OGG._crc32 = function (bytes) {
+  let crc = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    crc = (((crc << 8) & 0xffffffff) ^ OGG._crcTable[((crc >>> 24) & 0xff) ^ bytes[i]]) >>> 0;
+  }
+  return crc >>> 0;
+};
+
+const OGG_TAG_MAP = {
+  TITLE: "title", ARTIST: "artist", ALBUM: "album", ALBUMARTIST: "albumArtist",
+  DATE: "year", YEAR: "year", TRACKNUMBER: "track", DISCNUMBER: "disc",
+  GENRE: "genre", COMPOSER: "composer", COMMENT: "comment", LYRICS: "lyrics",
+};
+
+OGG.read = function (buffer) {
+  if (!buffer || buffer.byteLength < 27) return null;
+  const data = new Uint8Array(buffer);
+  if (data[0] !== 0x4F || data[1] !== 0x67 || data[2] !== 0x67 || data[3] !== 0x53) return null; // "OggS"
+  const rd32 = (o) => (data[o] | (data[o + 1] << 8) | (data[o + 2] << 16) | (data[o + 3] << 24)) >>> 0;
+
+  // 1. 遍历所有 page
+  const pages = [];
+  let off = 0;
+  while (off + 27 <= data.length) {
+    if (data[off] !== 0x4F || data[off + 1] !== 0x67 || data[off + 2] !== 0x67 || data[off + 3] !== 0x53) break;
+    const type = data[off + 5];
+    const serial = rd32(off + 14);
+    const nseg = data[off + 26];
+    const hdrLen = 27 + nseg;
+    if (off + hdrLen > data.length) break;
+    let pktLen = 0;
+    for (let i = 0; i < nseg; i++) pktLen += data[off + 27 + i];
+    const bodyStart = off + hdrLen;
+    if (bodyStart + pktLen > data.length) break;
+    pages.push({ off, type, serial, nseg, segStart: off + 27, bodyStart, pktLen, total: hdrLen + pktLen });
+    off = bodyStart + pktLen;
+  }
+  if (!pages.length) return null;
+
+  // 2. 找 comment header packet（0x03 + "vorbis"）
+  let commentPacket = null;
+  for (const pg of pages) {
+    let p = pg.bodyStart;
+    let cur = [];
+    for (let s = 0; s < pg.nseg; s++) {
+      const seg = data[pg.segStart + s];
+      for (let k = 0; k < seg; k++) cur.push(data[p + k]);
+      p += seg;
+      if (seg < 255) { // packet 结束
+        const pk = Uint8Array.from(cur);
+        if (pk.length >= 7 && pk[0] === 0x03 &&
+            pk[1] === 0x76 && pk[2] === 0x6F && pk[3] === 0x72 && pk[4] === 0x62 && pk[5] === 0x69 && pk[6] === 0x73) {
+          commentPacket = pk;
+          break;
+        }
+        cur = [];
+      }
+    }
+    if (commentPacket) break;
+  }
+  if (!commentPacket) return null;
+
+  // 3. 解析 vendor + comments
+  const dv = new DataView(commentPacket.buffer, commentPacket.byteOffset, commentPacket.byteLength);
+  let p = 7;
+  if (p + 4 > commentPacket.length) return null;
+  const vlen = dv.getUint32(p, true); p += 4;
+  if (p + vlen + 4 > commentPacket.length) return null;
+  const vendor = new TextDecoder("utf-8").decode(commentPacket.slice(p, p + vlen)); p += vlen;
+  const count = dv.getUint32(p, true); p += 4;
+  const fields = [];
+  for (let i = 0; i < count; i++) {
+    if (p + 4 > commentPacket.length) break;
+    const len = dv.getUint32(p, true); p += 4;
+    if (p + len > commentPacket.length) break;
+    fields.push(new TextDecoder("utf-8").decode(commentPacket.slice(p, p + len))); p += len;
+  }
+
+  const metadata = {};
+  for (const f of fields) {
+    const eq = f.indexOf("="); if (eq < 0) continue;
+    const k = f.slice(0, eq).toUpperCase(), v = f.slice(eq + 1);
+    if (OGG_TAG_MAP[k] && !metadata[OGG_TAG_MAP[k]]) metadata[OGG_TAG_MAP[k]] = v;
+  }
+  for (const k of ["title","artist","album","albumArtist","composer","year","track","disc","genre","comment","lyrics"]) {
+    if (metadata[k] === undefined) metadata[k] = "";
+  }
+  for (const k of ["title","artist","album","albumArtist","composer","year","track","disc","genre","comment","lyrics"]) {
+    if (metadata[k] === undefined) metadata[k] = "";
+  }
+  return { isOGG: true, metadata, vendor, fields, serial: pages[0].serial, pages, tailOffset: off };
+};
+
+OGG.write = function (buffer, tags, oggInfo) {
+  const data = new Uint8Array(buffer);
+  const s = (t) => { const b = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) b[i] = t.charCodeAt(i); return b; };
+  const u32 = (v) => new Uint8Array([v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]);
+  const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let q = 0; for (const x of a) { o.set(x, q); q += x.length; } return o; };
+
+  // 1. 构建新 comment packet
+  const addC = (k, v) => { if (v) comments.push(k + "=" + v); };
+  const comments = [];
+  addC("TITLE", tags.title); addC("ARTIST", tags.artist); addC("ALBUMARTIST", tags.albumArtist);
+  addC("ALBUM", tags.album); addC("DATE", tags.year); addC("TRACKNUMBER", tags.track);
+  addC("DISCNUMBER", tags.disc); addC("GENRE", tags.genre); addC("COMPOSER", tags.composer);
+  addC("COMMENT", tags.comment); addC("LYRICS", tags.lyrics);
+  const managed = ["TITLE", "ARTIST", "ALBUMARTIST", "ALBUM", "DATE", "YEAR", "TRACKNUMBER",
+    "DISCNUMBER", "GENRE", "COMPOSER", "COMMENT", "LYRICS"];
+  for (const f of (oggInfo.fields || [])) if (!managed.includes(f.split("=")[0])) comments.push(f);
+
+  const vb = new TextEncoder().encode(oggInfo.vendor || "music-tag-cf");
+  const cbs = comments.map(c => new TextEncoder().encode(c));
+  const pkt = new Uint8Array(7 + 4 + vb.length + 4 + cbs.reduce((n, b) => n + 4 + b.length, 0) + 1);
+  pkt[0] = 0x03; pkt.set(s("vorbis"), 1);
+  let p = 7;
+  pkt.set(u32(vb.length), p); p += 4; pkt.set(vb, p); p += vb.length;
+  pkt.set(u32(cbs.length), p); p += 4;
+  for (const b of cbs) { pkt.set(u32(b.length), p); p += 4; pkt.set(b, p); p += b.length; }
+  pkt[p] = 0x01; // framing bit
+
+  // 2. 分页（单 page body 上限 255*254，留一个终止 segment）
+  const MAX_BODY = 255 * 254;
+  const mkPage = (seq, type, body) => {
+    const segs = [];
+    let left = body.length;
+    while (left >= 255) { segs.push(255); left -= 255; }
+    segs.push(left);
+    const hdr = new Uint8Array(27 + segs.length);
+    hdr.set(s("OggS"), 0);
+    hdr[4] = 0;            // version
+    hdr[5] = type;         // header type
+    hdr.set(u32(0), 6); hdr.set(u32(0), 10); // granule = 0（header page）
+    hdr.set(u32(oggInfo.serial), 14);
+    hdr.set(u32(seq), 18);
+    hdr.set([0, 0, 0, 0], 22); // CRC 占位
+    hdr[26] = segs.length;
+    hdr.set(segs, 27);
+    const page = cat(hdr, body);
+    const crc = OGG._crc32(page);
+    page[22] = (crc >>> 24) & 255; page[23] = (crc >>> 16) & 255;
+    page[24] = (crc >>> 8) & 255; page[25] = crc & 255;
+    return page;
+  };
+  const newCommentPages = [];
+  let rem = pkt, seqCounter = 0;
+  while (rem.length > 0) {
+    const take = rem.slice(0, MAX_BODY);
+    rem = rem.slice(MAX_BODY);
+    newCommentPages.push(mkPage(seqCounter++, 0x00, take));
+  }
+
+  // 3. 重组：保留原 page 顺序，仅替换 comment 所在 page，音频 page 原样拷贝并重排 seq
+  const parts = [];
+  let outSeq = 0;
+  let replaced = false;
+  for (const pg of oggInfo.pages) {
+    if (!replaced && pg.bodyStart <= (pg.off + pg.total)) {
+      // 判断该 page 是否含 comment header packet
+      let hasComment = false;
+      let q = pg.bodyStart, cur = [];
+      for (let sN = 0; sN < pg.nseg; sN++) {
+        const seg = data[pg.segStart + sN];
+        cur = cur.concat(Array.from(data.slice(q, q + seg))); q += seg;
+        if (seg < 255) {
+          if (cur.length >= 7 && cur[0] === 0x03 &&
+              cur[1] === 0x76 && cur[2] === 0x6F && cur[3] === 0x72 && cur[4] === 0x62 && cur[5] === 0x69 && cur[6] === 0x73) {
+            hasComment = true; break;
+          }
+          cur = [];
+        }
+      }
+      if (hasComment) {
+        for (const np of newCommentPages) { parts.push(np); outSeq++; }
+        replaced = true;
+        continue;
+      }
+    }
+    // 原样拷贝该 page，仅重写 sequence number（保持音频 granule/数据不变）
+    const raw = data.slice(pg.off, pg.off + pg.total).slice();
+    raw[18] = outSeq & 255; raw[19] = (outSeq >>> 8) & 255;
+    raw[20] = (outSeq >>> 16) & 255; raw[21] = (outSeq >>> 24) & 255;
+    parts.push(raw);
+    outSeq++;
+  }
+  // 保留 pages 之后的尾部原始数据（防御非标准尾部字节被丢弃）
+  if (oggInfo.tailOffset && oggInfo.tailOffset < data.length) {
+    parts.push(data.slice(oggInfo.tailOffset));
+  }
+  return cat(...parts).buffer;
+};
+
+/** Parse MP3/MPEG audio info: scan for first sync frame, extract bitrate + sample rate */
+ID3._parseMP3Info = function(buffer) {
+  try {
+    const data = new Uint8Array(buffer);
+    // Skip ID3v2 tag header if present
+    let start = 0;
+    if (data.length > 9 && data[0] === 0x49 && data[1] === 0x44 && data[2] === 0x33) {
+      start = 10 + ((data[6] << 21) | (data[7] << 14) | (data[8] << 7) | data[9]);
+    }
+    // MPEG1 Layer3 bitrate table (kbps) indexed by [versionIdx][layerIdx][bitrateIdx]
+    const brTable = [
+      // MPEG1
+      [[0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,0],
+       [0,32,48,56, 64, 80, 96,112,128,160,192,224,256,320,384,0],
+       [0,32,40,48, 56, 64, 80, 96,112,128,160,192,224,256,320,0]],
+      // MPEG2/2.5
+      [[0,32,48,56,64,80,96,112,128,144,160,176,192,224,256,0],
+       [0, 8,16,24,32,40,48, 56, 64, 80, 96,112,128,144,160,0],
+       [0, 8,16,24,32,40,48, 56, 64, 80, 96,112,128,144,160,0]]
+    ];
+    const srTable = [[44100,48000,32000],[22050,24000,16000],[11025,12000,8000]];
+    const skip = Math.min(data.length, start + 32 * 1024);
+    for (let i = start; i < skip - 1; i++) {
+      if (data[i] !== 0xFF || (data[i+1] & 0xE0) !== 0xE0) continue;
+      const b = data[i+1];
+      const verIdx = (b & 0x18) === 0x18 ? 0 : (b & 0x08) ? 1 : 2;
+      const layerIdx = 3 - ((b & 0x06) >>> 1);
+      if (layerIdx < 0 || layerIdx > 2) continue;
+      const brIdx = (data[i+2] & 0xF0) >>> 4;
+      if (brIdx === 0 || brIdx === 15) continue;
+      const srIdx = (data[i+2] & 0x0C) >>> 2;
+      if (srIdx === 3) continue;
+      const bitrate = brTable[verIdx === 0 ? 0 : 1][layerIdx][brIdx];
+      const sampleRate = srTable[verIdx][srIdx];
+      const channels = (b & 0x06) === 0x06 ? 1 : 2;
+      if (bitrate > 0) return { bitrate, sampleRate, channels };
+    }
+  } catch(e) {}
+  return null;
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Application State & Logic
+// ═══════════════════════════════════════════════════════════════════════════
+
+const App = {
+  files: new Map(),      // fileId → { id, file, buffer, metadata, id3, modified }
+  selectedId: null,      // Currently selected file ID
+  searchResults: [],     // Search results cache
+  _searchPage: 0,        // Current page of search results
+  _searchPageSize: 5,    // Results per page
+
+  /** Initialize after DOM is ready */
+  init() {
+    this.setupDropzone();
+    this.setupKeyboard();
+    this.initTheme();
+    this.setupPlayer();
+  },
+
+  /** Bind player controls */
+  setupPlayer() {
+    const audio = document.getElementById("playerAudio");
+    // Mobile controls
+    const toggle = document.getElementById("playToggle");
+    const close = document.getElementById("playClose");
+    const seek = document.getElementById("playSeek");
+    const time = document.getElementById("playTime");
+    // Desktop panel controls
+    const pSeek = document.getElementById("playerPanelSeek");
+    const pTime = document.getElementById("playerPanelTime");
+
+    toggle.onclick = () => this.togglePlay();
+    close.onclick = () => this.closePlayer();
+    // Desktop panel buttons
+    (document.getElementById("btnPrev")||{}).onclick = () => this.prevTrack();
+    (document.getElementById("btnNext")||{}).onclick = () => this.nextTrack();
+
+    const updateUI = () => {
+      if (!audio.duration) return;
+      const val = (audio.currentTime / audio.duration) * 100;
+      const txt = this._fmtTime(audio.currentTime) + " / " + this._fmtTime(audio.duration);
+      seek.value = val; time.textContent = txt;
+      if (pSeek) pSeek.value = val;
+      if (pTime) pTime.textContent = txt;
+      // Update title with current lyrics line (follows playing track, not selected tab)
+      const pTitle = document.getElementById("playerPanelTitle");
+      if (pTitle) {
+        const playingEntry = this._playingId ? this.files.get(this._playingId) : null;
+        const lyricsText = playingEntry ? (playingEntry.metadata.lyrics || "") : "";
+        const line = this._getLyricLine(lyricsText, audio.currentTime);
+        const fallback = playingEntry ? (playingEntry._displayName || playingEntry.file.name) : "—";
+        pTitle.textContent = line || fallback;
+      }
+    };
+
+    audio.ontimeupdate = updateUI;
+    audio.onloadedmetadata = () => {
+      time.textContent = "00:00 / " + this._fmtTime(audio.duration);
+      if (pTime) pTime.textContent = time.textContent;
+    };
+    audio.onended = () => {
+      (window.innerWidth <= 768 ? document.getElementById("playToggle") : document.getElementById("playerPanelToggle")).textContent = "▶";
+      seek.value = 0; time.textContent = "00:00 / " + this._fmtTime(audio.duration);
+      if (pSeek) pSeek.value = 0;
+      if (pTime) pTime.textContent = time.textContent;
+    };
+
+    seek.oninput = () => { if (audio.duration) audio.currentTime = (seek.value / 100) * audio.duration; };
+    if (pSeek) pSeek.oninput = () => { if (audio.duration) audio.currentTime = (pSeek.value / 100) * audio.duration; };
+
+    // Volume control
+    const vol = document.getElementById("playerPanelVolume");
+    if (vol) vol.oninput = () => { audio.volume = vol.value / 100; };
+  },
+
+  _fmtTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  },
+
+  async _sha256(buffer) {
+    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  },
+
+  /** Parse LRC lyrics and return the line matching current time, or empty string if none */
+  _getLyricLine(lyricsText, currentSec) {
+    if (!lyricsText) return "";
+    const lines = lyricsText.split("\n");
+    if (!lines.length) return "";
+    let lastLine = "";
+    for (const line of lines) {
+      const m = line.match(/^\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]\s*(.*)/);
+      if (!m) continue;
+      const min = parseInt(m[1], 10);
+      const sec = parseInt(m[2], 10);
+      const ms = m[3] ? parseInt(m[3].padEnd(3, "0"), 10) / 1000 : 0;
+      const ts = min * 60 + sec + ms;
+      if (ts <= currentSec) lastLine = m[4] || "";
+      else break;
+    }
+    return lastLine;
+  },
+
+
+
+  /** Sync theme-button value to match body state */
+  initTheme() {
+    const btn = document.getElementById("themeBtn");
+    if (!btn) return;
+    const isLight = document.body.classList.contains("light");
+    btn.setAttribute("value", isLight ? "light" : "dark");
+  },
+
+  /** Toggle: select all files if none/all selected, deselect all if some selected */
+  toggleSelectAll() {
+    const all = this.files.size > 0 && [...this.files.values()].every(e => e._selected);
+    for (const [id, entry] of this.files) {
+      entry._selected = !all;
+    }
+    this.renderFileList();
+  },
+  /** Invert: selected ↔ unselected */
+  invertSelection() {
+    for (const [id, entry] of this.files) {
+      entry._selected = !entry._selected;
+    }
+    this.renderFileList();
+  },
+  /** Batch: rename downloaded files to "Artist - Title.ext" or "Title - Artist.ext" */
+  batchRename(format) {
+    let count = 0;
+    for (const [id, entry] of this.files) {
+      if (!entry._selected) continue;
+      const artist = entry.metadata.artist || "Unknown";
+      const title = entry.metadata.title || entry.file.name.replace(/\.[^.]+$/, "");
+      const ext = entry.file.name.split(".").pop();
+      if (format === "artist-title") {
+        entry._downloadName = `${artist} - ${title}.${ext}`;
+      } else {
+        entry._downloadName = `${title} - ${artist}.${ext}`;
+      }
+      // Store display name so renderEditor shows the new name
+      entry._displayName = entry._downloadName;
+      count++;
+    }
+    this.renderFileList();
+    this.renderEditor();
+    this.toast(`已设置 ${count} 个文件的重命名`, "success");
+  },
+  /**
+   * 批量一键查询并写入：对所有勾选文件自动搜索元数据 → 拉封面 → 拉歌词 → 写入 buffer。
+   * 串行处理 + 150ms 间隔，避免上游限流并保护 Cloudflare 免费额度。
+   * @param {object} [options] { autoDownload: 完成后是否自动批量下载 }
+   */
+  async batchSearchAndApply(options = {}) {
+    const { autoDownload = false } = options;
+    const targets = [...this.files.values()].filter(e => e._selected);
+    if (targets.length === 0) { this.toast("请先勾选要处理的文件", "error"); return; }
+
+    // 先把当前编辑中的改动同步到内存，避免批量覆盖当前文件的未保存编辑
+    this.saveCurrentToMemory();
+
+    const source = (document.getElementById("searchSource") || {}).value || "netease";
+    let ok = 0, noMatch = 0, fail = 0;
+    const failedNames = [];
+    const btn = document.getElementById("batchSearchBtn");
+    if (btn) { btn.disabled = true; btn.textContent = `查询中 0/${targets.length}`; }
+
+    for (let i = 0; i < targets.length; i++) {
+      const entry = targets[i];
+      if (btn) btn.textContent = `查询中 ${i + 1}/${targets.length}`;
+      // 关键词：优先「标题 艺术家」，回退文件名（去扩展名）
+      const q = [entry.metadata.title, entry.metadata.artist].filter(Boolean).join(" ").trim()
+             || entry.file.name.replace(/\.[^.]+$/, "");
+      try {
+        const resp = await fetch(`/api/tag/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(source)}`);
+        const data = await resp.json();
+        const list = data.results || [];
+        if (!list.length) { noMatch++; failedNames.push(entry.file.name + "(无结果)"); continue; }
+
+        // 最佳匹配：艺术家命中优先，否则取第一条
+        const curArtist = (entry.metadata.artist || "").trim();
+        const best = (curArtist && list.find(r => r.artist && (r.artist.includes(curArtist) || curArtist.includes(r.artist))))
+                     || list[0];
+
+        if (best.title)  entry.metadata.title  = best.title;
+        if (best.artist) entry.metadata.artist = best.artist;
+        if (best.album)  entry.metadata.album  = best.album;
+        if (best.albumArtist) entry.metadata.albumArtist = best.albumArtist || best.artist || "";
+        if (best.year)   entry.metadata.year   = best.year;
+        if (best.track)  entry.metadata.track  = best.track;
+        if (best.disc)   entry.metadata.disc   = best.disc;
+        if (best.genre)  entry.metadata.genre  = best.genre;
+
+        // 封面 + 歌词：必须 await 完成再写入，否则会写空（静默模式，避免 toast 刷屏）
+        if (best.cover) await this.downloadCoverFromUrl(best.cover, entry, true);
+        await this.fetchLyricsForEntry(entry, best, true);
+
+        // 写入 buffer（统一走 _writeTags，支持 MP3/FLAC/M4A/OGG/WAV）
+        const nb = this._writeTags(entry);
+        if (!nb) {
+          fail++; failedNames.push(entry.file.name + "(格式不支持写入)"); continue;
+        }
+        entry.buffer = nb;
+        entry.modified = true;
+        ok++;
+      } catch (e) {
+        fail++; failedNames.push(entry.file.name);
+      }
+      // 限流间隔
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    this.renderFileList();
+    this.renderEditor();
+
+    if (btn) { btn.disabled = false; btn.textContent = "🔍 一键查询并写入"; }
+    const tip = failedNames.length
+      ? "（" + failedNames.slice(0, 3).join("、") + (failedNames.length > 3 ? ` 等${failedNames.length}个` : "") + "）"
+      : "";
+    this.toast(`一键查询完成: ${ok} 成功, ${noMatch} 无结果, ${fail} 失败${tip}`, ok > 0 ? "success" : "error");
+
+    if (autoDownload && ok > 0) await this.batchDownload();
+  },
+
+  /** Batch: save all selected files */
+  batchSave() {
+    // 关键：先把当前编辑中的 UI 改动同步到内存，
+    // 否则「编辑了 A 但没单独保存 → 勾选 A+B 批量保存」时 A 的改动会丢失
+    this.saveCurrentToMemory();
+    let count = 0, failed = 0;
+    for (const [id, entry] of this.files) {
+      if (!entry._selected) continue;
+      if (!this._isWritable(entry)) { failed++; continue; }
+      try {
+        const nb = this._writeTags(entry);
+        if (!nb) { failed++; continue; }
+        entry.buffer = nb;
+        entry.modified = true;
+        count++;
+      } catch(e) { failed++; }
+    }
+    this.renderFileList();
+    this.renderEditor();
+    this.toast(`批量保存: ${count} 成功, ${failed} 失败`, count > 0 ? "success" : "error");
+  },
+  /** Batch: download all selected files */
+  async batchDownload() {
+    // Auto-save unsaved changes in current file before batch download
+    if (this.selectedId) {
+      const curEntry = this.files.get(this.selectedId);
+      if (curEntry && curEntry._selected && this._hasUnsavedChanges(curEntry)) {
+        this.saveCurrent();
+      }
+    }
+
+    let count = 0, failed = 0;
+    for (const [id, entry] of this.files) {
+      if (!entry._selected) continue;
+      if (!entry.buffer) { failed++; continue; }
+      try {
+        const isFLAC = entry.flacInfo && entry.flacInfo.isFLAC;
+        if (entry.modified) {
+          if (isFLAC) {
+            entry.buffer = FLAC.write(entry.buffer, entry.metadata, entry.flacInfo);
+          } else if (this._isMP3(entry)) {
+            entry.buffer = ID3.write(entry.buffer, entry.metadata, entry.id3);
+          }
+        }
+        const blob = new Blob([entry.buffer], { type: entry.file.type || "audio/mpeg" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = entry._downloadName || entry.file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        count++;
+        await new Promise(r => setTimeout(r, 200));
+      } catch(e) { failed++; }
+    }
+    this.toast(`批量下载: ${count} 成功, ${failed} 失败`, count > 0 ? "success" : "error");
+  },
+
+  /** Check file deduplication via SHA-256 */
+  async checkDuplicate(buffer, fileName) {
+    try {
+      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+      const hash = Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, "0")).join("");
+      for (const [id, entry] of this.files) {
+        if (entry._sha256 === hash) {
+          this.toast("检测到重复文件: " + entry.file.name, "warning");
+          return true;
+        }
+      }
+      // Find and store hash
+      for (const [id, entry] of this.files) {
+        if (entry.file.name === fileName && !entry._sha256) {
+          const hb2 = await crypto.subtle.digest("SHA-256", entry.buffer);
+          entry._sha256 = Array.from(new Uint8Array(hb2))
+            .map(b => b.toString(16).padStart(2, "0")).join("");
+          break;
+        }
+      }
+      return false;
+    } catch (e) { return false; }
+  },
+
+  /** Setup drag-and-drop and file input */
+  setupDropzone() {
+    const dz = document.getElementById("dropzone");
+    const input = document.getElementById("fileInput");
+
+    dz.addEventListener("click", () => input.click());
+    dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("dragover"); });
+    dz.addEventListener("dragleave", () => dz.classList.remove("dragover"));
+    dz.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dz.classList.remove("dragover");
+      this.addFiles(e.dataTransfer.files);
+    });
+    input.addEventListener("change", () => {
+      this.addFiles(input.files);
+      input.value = ""; // Reset so same file can be re-selected
+    });
+  },
+
+  /** Keyboard shortcuts */
+  setupKeyboard() {
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        this.saveCurrent();
+      }
+    });
+  },
+
+  /** Add files to the queue and process */
+  async addFiles(fileList) {
+    const validExts = [".mp3", ".flac", ".m4a", ".mp4", ".ogg", ".wav", ".wma", ".ape"];
+    const files = Array.from(fileList).filter((f) => {
+      const ext = "." + f.name.split(".").pop().toLowerCase();
+      return validExts.includes(ext);
+    });
+
+    if (files.length === 0) {
+      this.toast("未识别到支持的音频文件", "error");
+      return;
+    }
+
+    if (files.some((f) => f.size > 100 * 1024 * 1024)) {
+      this.toast("存在超过 100MB 的文件，已跳过", "error");
+    }
+
+    const valid = files.filter((f) => f.size <= 100 * 1024 * 1024);
+
+    let lastEntryId = null;
+    let dupCount = 0;
+    let dupNames = [];
+    const seenHashes = new Set();
+    for (const file of valid) {
+      const id = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+
+      // Read file buffer once (arrayBuffer can only be called once per File)
+      let buffer = null;
+      let hashHex = null;
+      try {
+        buffer = await file.arrayBuffer();
+        hashHex = await this._sha256(buffer);
+        // Check against existing files (cross-batch dedup)
+        for (const [eid, e] of this.files) {
+          if (e._sha256 === hashHex) { hashHex = "__dup__"; dupCount++; dupNames.push(file.name); break; }
+        }
+        if (hashHex === "__dup__") continue;
+        // Check within current batch
+        if (seenHashes.has(hashHex)) { dupCount++; dupNames.push(file.name); continue; }
+        seenHashes.add(hashHex);
+      } catch(e) { /* proceed without hash */ }
+
+      const entry = {
+        id, file,
+        buffer: buffer,
+        metadata: {},
+        id3: null,
+        modified: false,
+        originalMetadata: {},
+        _sha256: hashHex
+      };
+
+      if (buffer) {
+      try {
+        entry.buffer = buffer;
+
+        // 依次尝试各格式解析器：MP3(ID3) / FLAC / M4A / OGG / WAV
+        const id3 = ID3.read(buffer);
+        const flacInfo = FLAC.read(buffer);
+        const m4aInfo = M4A.read(buffer);
+        const oggInfo = OGG.read(buffer);
+        const wavInfo = WAV.read(buffer);
+        entry.id3 = id3;
+        entry.flacInfo = flacInfo;
+        entry.m4aInfo = m4aInfo;
+        entry.oggInfo = oggInfo;
+        entry.wavInfo = wavInfo;
+        // Parse audio info for display
+        if (flacInfo && flacInfo.streamInfo) {
+          entry.audioInfo = flacInfo.streamInfo;
+        } else if (id3) {
+          entry.audioInfo = ID3._parseMP3Info(buffer);
+        }
+
+        // 字段归并：源优先级 FLAC > ID3 > M4A > OGG > WAV（前者有值的字段优先）
+        const metaSrcs = [
+          (flacInfo && flacInfo.metadata) || {},
+          (id3 && id3.frames) || {},
+          (m4aInfo && m4aInfo.metadata) || {},
+          (oggInfo && oggInfo.metadata) || {},
+          (wavInfo && wavInfo.metadata) || {},
+        ];
+        if (metaSrcs.some(src => Object.keys(src).length > 0)) {
+          entry.metadata = {};
+          for (const k of ["title","artist","album","albumArtist","composer",
+                           "year","track","disc","genre","comment","lyrics"]) {
+            entry.metadata[k] = metaSrcs.map(src => src[k]).find(v => v) || "";
+          }
+          if (flacInfo && flacInfo.cover) entry.metadata._cover = flacInfo.cover;
+          else if (id3 && id3.cover) entry.metadata._cover = id3.cover;
+        }
+
+        // Store original for reset
+        entry.originalMetadata = { ...entry.metadata };
+        this.files.set(id, entry);
+        lastEntryId = id; // Track for auto-select
+      } catch (err) {
+        // File corrupted or unreadable — still add with empty metadata
+        this.files.set(id, entry);
+      }
+      } // end if (buffer)
+      else { this.files.set(id, entry); }
+    }
+
+    this.renderFileList();
+    if (dupCount > 0) {
+      const show = dupNames.length <= 3 ? dupNames.join("、") : dupNames.slice(0, 3).join("、") + ` 等${dupNames.length}个`;
+      this.toast(`已添加 ${valid.length - dupCount} 个，跳过 ${dupCount} 个重复: ${show}`, "warning");
+    } else {
+      this.toast(`已添加 ${valid.length} 个文件`, "success");
+    }
+
+    // Auto-select the most recently uploaded file
+    if (lastEntryId) {
+      this.selectFile(lastEntryId);
+    }
+  },
+
+  /** Select a file for editing */
+  /** Click on file item: toggle select + switch to tag editor */
+  onFileItemClick(event, id) {
+    const entry = this.files.get(id);
+    if (!entry) return;
+    // Toggle selection, then switch active file BEFORE re-rendering
+    entry._selected = !entry._selected;
+    this.selectedId = id;
+    this.renderFileList();
+    this.renderEditor();
+  },
+
+  /** Double-click on file item: play the song */
+  onFileItemDblClick(event, id) {
+    event.preventDefault();
+    const entry = this.files.get(id);
+    if (!entry || !entry.buffer) return;
+    this.playAudio(entry);
+  },
+
+  /** Play audio from entry buffer */
+  playAudio(entry) {
+    const audio = document.getElementById("playerAudio");
+    const isMobile = window.innerWidth <= 768;
+    const title = entry._displayName || entry.file.name;
+    // Revoke previous URL if any
+    if (this._playUrl) URL.revokeObjectURL(this._playUrl);
+    const blob = new Blob([entry.buffer], { type: entry.file.type || "audio/mpeg" });
+    this._playUrl = URL.createObjectURL(blob);
+    audio.src = this._playUrl;
+    audio.volume = (parseInt(document.getElementById("playerPanelVolume")?.value || 80)) / 100;
+    if (isMobile) {
+      document.getElementById("playerBar").style.display = "flex";
+      document.body.style.paddingBottom = document.getElementById("playerBar").offsetHeight + "px";
+      document.getElementById("playTitle").textContent = title;
+      document.getElementById("playToggle").textContent = "⏸";
+    } else {
+      document.getElementById("playerPanel").style.display = "flex";
+      const pTitle = document.getElementById("playerPanelTitle");
+      pTitle.textContent = title;
+      pTitle.dataset.filename = title;
+      document.getElementById("playerPanelToggle").textContent = "⏸";
+    }
+    this._playingId = entry.id;
+    audio.play().catch(() => {});
+  },
+
+  /** Show player panel (no autoplay) — does NOT interrupt active playback */
+  preparePlayer(entry) {
+    if (!entry || !entry.buffer) return;
+    const audio = document.getElementById("playerAudio");
+    const isMobile = window.innerWidth <= 768;
+    const title = entry._displayName || entry.file.name;
+    const playing = !audio.paused && audio.src && audio.src !== window.location.href;
+    // Show player UI with current entry info
+    if (isMobile) {
+      document.getElementById("playerBar").style.display = "flex";
+      document.body.style.paddingBottom = document.getElementById("playerBar").offsetHeight + "px";
+      document.getElementById("playToggle").textContent = playing ? "⏸" : "▶";
+    } else {
+      document.getElementById("playerPanel").style.display = "flex";
+      document.getElementById("playerPanelToggle").textContent = playing ? "⏸" : "▶";
+    }
+    // Only load audio src if nothing is currently loaded
+    if (!audio.src || audio.src === window.location.href) {
+      if (this._playUrl) URL.revokeObjectURL(this._playUrl);
+      const blob = new Blob([entry.buffer], { type: entry.file.type || "audio/mpeg" });
+      this._playUrl = URL.createObjectURL(blob);
+      audio.src = this._playUrl;
+      audio.volume = (parseInt(document.getElementById("playerPanelVolume")?.value || 80)) / 100;
+      this._playingId = entry.id;
+      // Set title only when loading new audio; updateUI handles it during playback
+      if (!playing) {
+        if (isMobile) document.getElementById("playTitle").textContent = title;
+        else {
+          const pTitle = document.getElementById("playerPanelTitle");
+          pTitle.textContent = title;
+          pTitle.dataset.filename = title;
+        }
+      }
+    }
+  },
+
+  togglePlay() {
+    const audio = document.getElementById("playerAudio");
+    const isMobile = window.innerWidth <= 768;
+    if (audio.paused) {
+      audio.play();
+      (isMobile ? document.getElementById("playToggle") : document.getElementById("playerPanelToggle")).textContent = "⏸";
+    } else {
+      audio.pause();
+      (isMobile ? document.getElementById("playToggle") : document.getElementById("playerPanelToggle")).textContent = "▶";
+    }
+  },
+
+  /** Play next track */
+  nextTrack() {
+    const ids = [...this.files.keys()];
+    if (!ids.length) return;
+    const idx = ids.indexOf(this._playingId);
+    const nextId = idx >= 0 ? ids[(idx + 1) % ids.length] : ids[0];
+    const entry = this.files.get(nextId);
+    if (entry && entry.buffer) this.playAudio(entry);
+  },
+
+  /** Play previous track */
+  prevTrack() {
+    const ids = [...this.files.keys()];
+    if (!ids.length) return;
+    const idx = ids.indexOf(this._playingId);
+    const prevId = idx >= 0 ? ids[(idx - 1 + ids.length) % ids.length] : ids[ids.length - 1];
+    const entry = this.files.get(prevId);
+    if (entry && entry.buffer) this.playAudio(entry);
+  },
+
+  /** Toggle loop mode: none → list → single → random */
+  toggleLoop() {
+    const modes = ["none", "list", "single", "random"];
+    this._loopMode = ((this._loopMode || 0) + 1) % 4;
+    const btn = document.getElementById("btnLoop");
+    btn.textContent = ["🔁", "🔁", "🔂", "🔀"][this._loopMode];
+    btn.title = ["列表循环", "列表循环", "单曲循环", "随机播放"][this._loopMode];
+    const audio = document.getElementById("playerAudio");
+    audio.loop = (this._loopMode === 2);
+    const resetUI = () => {
+      const isM = window.innerWidth <= 768;
+      (isM ? document.getElementById("playToggle") : document.getElementById("playerPanelToggle")).textContent = "▶";
+    };
+    if (this._loopMode === 0) { audio.onended = () => { resetUI(); }; }
+    else if (this._loopMode === 3) {
+      audio.onended = () => {
+        resetUI();
+        const ids = [...this.files.keys()];
+        if (ids.length) {
+          const rnd = ids[Math.floor(Math.random() * ids.length)];
+          const e = this.files.get(rnd);
+          if (e && e.buffer) this.playAudio(e);
+        }
+      };
+    } else { audio.onended = () => { if (this._loopMode === 1) this.nextTrack(); }; }
+  },
+
+  /** Toggle mute on/off */
+  toggleMute() {
+    const audio = document.getElementById("playerAudio");
+    audio.muted = !audio.muted;
+    const icon = document.getElementById("btnVolumeIcon");
+    if (icon) icon.textContent = audio.muted ? "🔇" : "🔊";
+  },
+
+  /** Stop playback and hide player */
+  closePlayer() {
+    const audio = document.getElementById("playerAudio");
+    audio.pause();
+    audio.src = "";
+    if (this._playUrl) { URL.revokeObjectURL(this._playUrl); this._playUrl = null; }
+    document.getElementById("playerBar").style.display = "none";
+    document.getElementById("playerPanel").style.display = "none";
+    document.body.style.paddingBottom = ""; // Reset mobile padding
+  },
+
+  selectFile(id) {
+    this.saveCurrentToMemory(); // Save current edits before switching
+    this.selectedId = id;
+    this.renderFileList();
+    this.renderEditor();
+  },
+
+  /** Save current editor values back to file entry memory */
+  saveCurrentToMemory() {
+    if (!this.selectedId) return;
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    entry.metadata.title      = document.getElementById("tagTitle")?.value      || "";
+    entry.metadata.artist     = document.getElementById("tagArtist")?.value     || "";
+    entry.metadata.albumArtist= document.getElementById("tagAlbumArtist")?.value|| "";
+    entry.metadata.composer   = document.getElementById("tagComposer")?.value   || "";
+    entry.metadata.album      = document.getElementById("tagAlbum")?.value      || "";
+    entry.metadata.year       = document.getElementById("tagYear")?.value       || "";
+    entry.metadata.track      = document.getElementById("tagTrack")?.value      || "";
+    entry.metadata.disc       = document.getElementById("tagDisc")?.value       || "";
+    entry.metadata.genre      = document.getElementById("tagGenre")?.value      || "";
+    entry.metadata.comment    = document.getElementById("tagComment")?.value    || "";
+    entry.metadata.lyrics     = document.getElementById("tagLyrics")?.value     || "";
+
+    // Check if actually modified compared to original
+    const orig = entry.originalMetadata;
+    entry.modified = (
+      (entry.metadata.title      !== orig.title)      ||
+      (entry.metadata.artist     !== orig.artist)     ||
+      (entry.metadata.albumArtist!== orig.albumArtist)||
+      (entry.metadata.composer   !== orig.composer)   ||
+      (entry.metadata.album      !== orig.album)      ||
+      (entry.metadata.year       !== orig.year)       ||
+      (entry.metadata.track      !== orig.track)      ||
+      (entry.metadata.disc       !== orig.disc)       ||
+      (entry.metadata.genre      !== orig.genre)      ||
+      (entry.metadata.comment    !== orig.comment)    ||
+      (entry.metadata.lyrics     !== orig.lyrics)     ||
+      entry.metadata._newCover !== undefined ||
+      entry.metadata._removeCover
+    );
+  },
+
+  /** Render the file list sidebar */
+  renderFileList() {
+    const container = document.getElementById("fileItems");
+    const countEl = document.getElementById("fileCount");
+
+    if (this.files.size === 0) {
+      container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.8rem">暂无文件</div>';
+      countEl.textContent = "0";
+      document.getElementById("clearBtn").disabled = true;
+      document.getElementById("editorContent").style.display = "none";
+      document.getElementById("editorEmpty").style.display = "flex";
+      return;
+    }
+
+    countEl.textContent = this.files.size;
+    document.getElementById("clearBtn").disabled = false;
+
+    // Update select toggle button text
+    const allSelected = this.files.size > 0 && [...this.files.values()].every(e => e._selected);
+    document.getElementById("selectToggleBtn").textContent = allSelected ? "☐ 取消全选" : "☑ 全选";
+
+    let html = "";
+    for (const [id, entry] of this.files) {
+      const active = id === this.selectedId ? " active" : "";
+      const statusClass = entry.modified ? "modified" : "original";
+      const statusText = entry.modified ? "已修改" : "";
+      const ext = entry.file.name.split(".").pop().toUpperCase();
+      const size = this.formatSize(entry.file.size);
+      const checked = entry._selected ? " checked" : "";
+      // Show renamed name or original
+      const displayName = entry._displayName || entry.file.name;
+
+      // Create cover blob URL if not yet set
+      if (!entry._coverBlobUrl && entry.metadata._cover) {
+        const blob = new Blob([entry.metadata._cover.data], { type: entry.metadata._cover.mime });
+        entry._coverBlobUrl = URL.createObjectURL(blob);
+      }
+
+      html += `
+        <div class="file-item${active}" onclick="App.onFileItemClick(event, '${id}')" ondblclick="App.onFileItemDblClick(event, '${id}')">
+          <input type="checkbox" ${checked} style="margin-right:4px;accent-color:var(--accent)" onclick="event.stopPropagation();event.preventDefault();return false" title="选中批量操作">
+          <div class="icon">${entry._coverBlobUrl ? `<img src="${entry._coverBlobUrl}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${ext.slice(0, 3)}';">` : ext.slice(0, 3)}</div>
+          <div class="info">
+            <div class="name" title="${this.esc(displayName)}">${this.esc(displayName)}</div>
+            <div class="size">${size}</div>
+          </div>
+          ${statusText ? `<span class="status ${statusClass}">${statusText}</span>` : ""}
+        </div>
+      `;
+    }
+    container.innerHTML = html;
+  },
+
+  /** Render the editor for the currently selected file */
+  renderEditor() {
+    if (!this.selectedId) {
+      document.getElementById("editorContent").style.display = "none";
+      document.getElementById("editorEmpty").style.display = "flex";
+      return;
+    }
+
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    document.getElementById("editorEmpty").style.display = "none";
+    document.getElementById("editorContent").style.display = "flex";
+
+    const m = entry.metadata;
+    // Show display name (renamed) or original file name
+    const displayName = entry._displayName || entry.file.name;
+    document.getElementById("currentFileName").textContent = displayName;
+    const ext = entry.file.name.split(".").pop().toUpperCase();
+    const badgeEl = document.getElementById("formatBadgeDisplay");
+    const ftDisplay = document.getElementById("formatTagDisplay");
+
+    // Build audio info array: kbps · kHz · bit · ch
+    const info = [];
+    let quality = null; // "hr" | "hq" | "sq" | null
+    if (entry.flacInfo && entry.flacInfo.streamInfo) {
+      const si = entry.flacInfo.streamInfo;
+      if (si.sampleRate && si.bitDepth && si.channels) {
+        info.push(Math.round(si.sampleRate * si.bitDepth * si.channels / 1000) + "kbps");
+      }
+      if (si.sampleRate) info.push((si.sampleRate / 1000).toFixed(1).replace(/\.0$/, "") + "kHz");
+      if (si.bitDepth) info.push(si.bitDepth + "bit");
+      if (si.channels) info.push(si.channels + "ch");
+      // FLAC quality: HR if >=24bit or >=96kHz, HQ otherwise
+      if (si.bitDepth >= 24 || si.sampleRate >= 96000) quality = "hr";
+      else quality = "hq";
+    } else if (entry.audioInfo && entry.audioInfo.bitrate) {
+      const ai = entry.audioInfo;
+      if (ai.bitrate) info.push(ai.bitrate + "kbps");
+      if (ai.sampleRate) info.push((ai.sampleRate / 1000).toFixed(1).replace(/\.0$/, "") + "kHz");
+      info.push("16bit");
+      info.push((ai.channels || 2) + "ch");
+      // MP3 quality: >=320kbps=HQ, >=256kbps=SQ, else standard
+      if (ai.bitrate >= 320) quality = "hq";
+      else if (ai.bitrate >= 256) quality = "sq";
+    }
+
+    // Format badge: ext + quality tag
+    const tagMap = { hr: ["Hi-Res", "quality-hr"], hq: ["HQ", "quality-hq"], sq: ["SQ", "quality-sq"] };
+    badgeEl.innerHTML = ext + (quality && tagMap[quality]
+      ? ` <span class="quality-tag ${tagMap[quality][1]}">${tagMap[quality][0]}</span>`
+      : "");
+
+    // Audio info: two rows, two pairs each
+    if (info.length > 0) {
+      const row1 = info.slice(0, 2).join(" · ");
+      const row2 = info.slice(2, 4).join(" · ");
+      ftDisplay.innerHTML = `<div>${row1}</div><div>${row2}</div>`;
+    } else {
+      ftDisplay.textContent = "—";
+    }
+
+    document.getElementById("tagTitle").value      = m.title       || "";
+    document.getElementById("tagArtist").value     = m.artist      || "";
+    document.getElementById("tagAlbumArtist").value= m.albumArtist || "";
+    document.getElementById("tagComposer").value   = m.composer    || "";
+    document.getElementById("tagAlbum").value      = m.album       || "";
+    document.getElementById("tagYear").value       = m.year        || "";
+    document.getElementById("tagTrack").value      = m.track       || "";
+    document.getElementById("tagDisc").value       = m.disc        || "";
+    document.getElementById("tagGenre").value      = m.genre       || "";
+    document.getElementById("tagComment").value    = m.comment     || "";
+    document.getElementById("tagLyrics").value     = m.lyrics      || "";
+
+    // Cover art
+    this.renderCover(entry);
+    this.searchResults = [];
+    this._searchPage = 0;
+    document.getElementById("searchResults").innerHTML = "";
+    document.getElementById("searchQuery").value = "";
+
+    // Show player panel in paused state (if entry has buffer)
+    this.preparePlayer(entry);
+  },
+
+  /** Render cover art preview */
+  renderCover(entry) {
+    const preview = document.getElementById("coverPreview");
+    // Reuse existing blob URL to avoid breaking file-list thumbnails
+    if (!entry._coverBlobUrl && entry.metadata._cover) {
+      const blob = new Blob([entry.metadata._cover.data], { type: entry.metadata._cover.mime });
+      entry._coverBlobUrl = URL.createObjectURL(blob);
+    }
+    if (entry._coverBlobUrl) {
+      preview.innerHTML = `<img src="${entry._coverBlobUrl}" alt="封面">`;
+    } else {
+      preview.innerHTML = '<span class="placeholder">无封面</span>';
+    }
+  },
+
+  /** Handle cover image file selection */
+  async onCoverFileSelected(input) {
+    if (!input.files || !input.files[0]) return;
+    if (!this.selectedId) return;
+
+    const file = input.files[0];
+    if (!file.type.startsWith("image/")) {
+      this.toast("请选择图片文件", "error");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      this.toast("封面图片不能超过 5MB", "error");
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const entry = this.files.get(this.selectedId);
+      if (!entry) return;
+
+      entry.metadata._newCover = { mime: file.type, data: new Uint8Array(buffer) };
+      entry.metadata._removeCover = false;
+      entry.metadata._cover = { mime: file.type, data: new Uint8Array(buffer) };
+      entry.modified = true;
+      // Refresh blob URL so renderCover/FileList picks up the new image
+      if (entry._coverBlobUrl) { URL.revokeObjectURL(entry._coverBlobUrl); entry._coverBlobUrl = null; }
+      this.renderCover(entry);
+      this.renderFileList();
+      this.toast("封面已更新", "success");
+    } catch (err) {
+      this.toast("封面加载失败", "error");
+    }
+    input.value = ""; // Reset
+  },
+
+  /** Remove cover art from current file */
+  removeCover() {
+    if (!this.selectedId) return;
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    entry.metadata._removeCover = true;
+    entry.metadata._newCover = undefined;
+    entry.metadata._cover = null;
+    entry.modified = true;
+    // Refresh blob URL so renderCover shows placeholder
+    if (entry._coverBlobUrl) { URL.revokeObjectURL(entry._coverBlobUrl); entry._coverBlobUrl = null; }
+    this.renderCover(entry);
+    this.renderFileList();
+    this.toast("封面已移除", "info");
+  },
+
+  /** Search auto-tag via Worker API */
+  async searchTag() {
+    this.saveCurrentToMemory();
+    if (!this.selectedId) return;
+
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    const query = document.getElementById("searchQuery").value.trim();
+    const source = document.getElementById("searchSource").value;
+
+    // Auto-fill search from metadata: prefer "title artist", fallback to filename
+    if (!query) {
+      const artist = entry.metadata.artist || "";
+      const title = entry.metadata.title || "";
+      if (title || artist) {
+        document.getElementById("searchQuery").value = [title, artist].filter(Boolean).join(" ");
+      } else {
+        // Fallback: extract song name from filename (remove extension)
+        document.getElementById("searchQuery").value = entry.file.name.replace(/\.[^.]+$/, "");
+      }
+    }
+    const searchText = document.getElementById("searchQuery").value.trim();
+
+    if (!searchText) {
+      this.toast("请输入搜索关键词", "error");
+      return;
+    }
+
+    document.getElementById("searchQuery").value = searchText;
+    const searchBtn = document.getElementById("searchBtn");
+    searchBtn.disabled = true;
+    searchBtn.textContent = "搜索中...";
+
+    const resultsEl = document.getElementById("searchResults");
+    resultsEl.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:.8rem">搜索中...</div>';
+
+    try {
+      const resp = await fetch(`/api/tag/search?q=${encodeURIComponent(searchText)}&source=${source}`);
+      const data = await resp.json();
+
+      if (data.error) {
+        this.toast("搜索失败: " + data.error.message, "error");
+        resultsEl.innerHTML = "";
+        return;
+      }
+
+      this.searchResults = data.results || [];
+      this._searchPage = 0;
+      this.renderSearchResults();
+    } catch (err) {
+      this.toast("搜索请求失败", "error");
+      resultsEl.innerHTML = "";
+    } finally {
+      searchBtn.disabled = false;
+      searchBtn.textContent = "🔍 搜索";
+    }
+  },
+
+  /** Render search result cards with pagination (5 per page) */
+  renderSearchResults() {
+    const el = document.getElementById("searchResults");
+    if (this.searchResults.length === 0) {
+      el.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:.8rem">未找到匹配结果</div>';
+      return;
+    }
+
+    const pageSize = this._searchPageSize;
+    const totalPages = Math.ceil(this.searchResults.length / pageSize);
+    const page = Math.min(this._searchPage, totalPages - 1);
+    const start = page * pageSize;
+    const batch = this.searchResults.slice(start, start + pageSize);
+
+    let html = batch.map((r, i) => {
+      const idx = start + i;
+      const coverSrc = r.cover ? `/api/cover/proxy?url=${encodeURIComponent(r.cover)}` : "";
+      return `<div class="search-result" data-idx="${idx}">
+        <div class="cover">
+          ${coverSrc ? `<img src="${coverSrc}" alt="" onerror="this.style.display='none'">` : ""}
+        </div>
+        <div class="meta">
+          <div class="title">${this.esc(r.title)}</div>
+          <div class="artist">${this.esc(r.artist)}${r.album ? " · " + this.esc(r.album) : ""}</div>
+        </div>
+        <span class="source">${r.source || ""}</span>
+        <button class="btn btn-primary btn-sm" onclick="App.applyTag(${idx})">应用</button>
+      </div>`;
+    }).join("");
+
+    // Pagination controls
+    if (totalPages > 1) {
+      html += `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0 0 0;font-size:.8rem;color:var(--text-muted)">
+        <button class="btn btn-sm btn-secondary" onclick="App._searchPage=Math.max(0,App._searchPage-1);App.renderSearchResults()"
+          ${page === 0 ? 'disabled' : ''}>◀ 上一页</button>
+        <span>${page + 1} / ${totalPages}</span>
+        <button class="btn btn-sm btn-secondary" onclick="App._searchPage=Math.min(${totalPages - 1},App._searchPage+1);App.renderSearchResults()"
+          ${page >= totalPages - 1 ? 'disabled' : ''}>下一页 ▶</button>
+      </div>`;
+    }
+
+    el.innerHTML = html;
+
+    // Load covers asynchronously for items with album picId
+    this._loadCoversAsync();
+  },
+
+  /** Load album covers asynchronously after rendering search results */
+  async _loadCoversAsync() {
+    for (let i = 0; i < this.searchResults.length; i++) {
+      const r = this.searchResults[i];
+      if (r.cover || !r._albumPicId) continue;
+      // Skip results with album picId 0 (placeholder)
+      if (r._albumPicId === 0 || r._albumPicId === "0") continue;
+      try {
+        const resp = await fetch(`/api/cover/album?id=${encodeURIComponent(r.id)}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.picUrl) {
+            r.cover = data.picUrl;
+            // Update the img src in-place via DOM
+            const el = document.querySelector(`.search-result[data-idx="${i}"] .cover img`);
+            if (el) {
+              el.src = `/api/cover/proxy?url=${encodeURIComponent(data.picUrl)}`;
+              el.style.display = "";
+            } else {
+              // No img element yet — create one
+              const coverDiv = document.querySelector(`.search-result[data-idx="${i}"] .cover`);
+              if (coverDiv) {
+                coverDiv.innerHTML = `<img src="/api/cover/proxy?url=${encodeURIComponent(data.picUrl)}" alt="">`;
+              }
+            }
+          }
+        }
+      } catch (e) { /* cover load failed — keep placeholder */ }
+    }
+  },
+
+  /** Apply a search result to the current file's metadata */
+  async applyTag(index) {
+    if (!this.selectedId) return;
+    const result = this.searchResults[index];
+    if (!result) return;
+
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    // Apply all available fields
+    if (result.title)       entry.metadata.title       = result.title;
+    if (result.artist)      entry.metadata.artist      = result.artist;
+    if (result.album)       entry.metadata.album       = result.album;
+    if (result.albumArtist) entry.metadata.albumArtist = result.albumArtist || result.artist || "";
+    if (result.composer)    entry.metadata.composer    = result.composer || "";
+    if (result.year)        entry.metadata.year        = result.year || "";
+    if (result.track)       entry.metadata.track       = result.track || "";
+    if (result.disc)        entry.metadata.disc        = result.disc || "";
+    if (result.genre)       entry.metadata.genre       = result.genre || "";
+
+    this.renderEditor();
+
+    // 并行拉取封面 + 歌词，必须全部完成后再提示成功，
+    // 否则用户会在歌词尚未返回时点保存，导致写入空歌词（历史 P0 竞态 bug）
+    const tasks = [];
+    if (result.cover) tasks.push(this.downloadCoverFromUrl(result.cover, entry));
+    tasks.push(this.fetchLyricsForEntry(entry, result));
+    await Promise.all(tasks);
+
+    this.toast("已应用标签: " + result.title, "success");
+  },
+
+  /** Download cover image from URL via Worker proxy and store in metadata
+   *  @param {boolean} [silent] 批量模式：不弹逐条 toast，避免刷屏
+   */
+  async downloadCoverFromUrl(coverUrl, entry, silent) {
+    try {
+      const proxyUrl = `/api/cover/proxy?url=${encodeURIComponent(coverUrl)}`;
+      const resp = await fetch(proxyUrl);
+      if (!resp.ok) { if (!silent) this.toast("封面获取失败(接口 " + resp.status + ")", "error"); return false; }
+
+      const blob = await resp.blob();
+      if (blob.size < 1000) { if (!silent) this.toast("封面数据过小，已跳过", "info"); return false; } // Too small, probably an error image
+
+      const buffer = await blob.arrayBuffer();
+      entry.metadata._newCover = { mime: blob.type || "image/jpeg", data: new Uint8Array(buffer) };
+      entry.metadata._removeCover = false;
+      entry.metadata._cover = { mime: blob.type || "image/jpeg", data: new Uint8Array(buffer) };
+      entry.modified = true;
+      // Refresh blob URL
+      if (entry._coverBlobUrl) { URL.revokeObjectURL(entry._coverBlobUrl); entry._coverBlobUrl = null; }
+
+      // 大预览只在「该文件正是当前选中文件」时刷新，避免批量时串图
+      if (this.selectedId === entry.id) this.renderCover(entry);
+      this.renderFileList();
+      return true;
+    } catch (e) {
+      // 不再静默：封面失败必须让用户看见（批量模式下由汇总 toast 统一提示）
+      if (!silent) this.toast("封面获取异常: " + e.message, "error");
+      return false;
+    }
+  },
+
+  /**
+   * 拉取歌词：优先用网易云 songId；非网易云源(QQ/咪咕/iTunes)则回退用「标题+艺术家」
+   * 到网易云再搜一次取 id。所有失败路径都必须 toast，禁止静默。
+   * @returns {Promise<boolean>} 是否成功写入歌词
+   */
+  async fetchLyricsForEntry(entry, result, silent) {
+    try {
+      let songId = (result && result.source === "netease" && result.id) ? String(result.id) : null;
+
+      // 非网易云源（或缺少 id）→ 回退到网易云按歌名搜一次拿 songId
+      if (!songId) {
+        const q = [entry.metadata.title, entry.metadata.artist].filter(Boolean).join(" ").trim();
+        if (!q) { if (!silent) this.toast("未拉取歌词: 缺少标题/艺术家信息", "info"); return false; }
+        const sResp = await fetch(`/api/tag/search?q=${encodeURIComponent(q)}&source=netease`);
+        if (sResp.ok) {
+          const sData = await sResp.json();
+          const first = (sData.results || []).find(r => r.source === "netease");
+          if (first) songId = String(first.id);
+        }
+      }
+      if (!songId) { if (!silent) this.toast("未找到歌词来源", "info"); return false; }
+
+      const resp = await fetch(`/api/lyrics/fetch?id=${encodeURIComponent(songId)}`);
+      if (!resp.ok) { if (!silent) this.toast("歌词获取失败(接口 " + resp.status + ")", "error"); return false; }
+      const data = await resp.json();
+      if (data.lyrics && data.lyrics.trim()) {
+        entry.metadata.lyrics = data.lyrics;
+        // 仅在「该文件正是当前选中文件」时才同步到编辑框，
+        // 否则批量处理时会把 A 的歌词写进当前选中文件 B 的输入框
+        if (this.selectedId === entry.id) {
+          const el = document.getElementById("tagLyrics");
+          if (el) el.value = data.lyrics;
+        }
+        entry.modified = true;
+        if (!silent) this.toast("已获取歌词", "success");
+        return true;
+      }
+      if (!silent) this.toast("该歌曲无歌词资源", "info");
+      return false;
+    } catch (e) {
+      // 不再静默：任何异常都必须让用户看见（批量模式由汇总 toast 统一提示）
+      if (!silent) this.toast("歌词获取异常: " + e.message, "error");
+      return false;
+    }
+  },
+
+  /** Parse filename to extract artist/title (e.g. "Artist - Title.mp3") */
+  parseFilenameToTags() {
+    if (!this.selectedId) return;
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    const name = entry.file.name.replace(/\.[^.]+$/, ""); // Remove extension
+    const patterns = [
+      /^(.+?)\s*[-–—]\s*(.+)$/,       // Artist - Title
+      /^(.+?)\s*[-–—]\s*(.+)$/,       // Artist–Title
+      /^[(（]\d+[)）]\s*(.+?)\s*[-–—]\s*(.+)$/, // (01) Artist - Title
+    ];
+
+    for (const p of patterns) {
+      const m = name.match(p);
+      if (m) {
+        entry.metadata.artist = m[1].trim();
+        entry.metadata.title = m[2].trim();
+        this.renderEditor();
+        this.toast("已解析: " + m[1].trim() + " - " + m[2].trim(), "success");
+        return;
+      }
+    }
+
+    this.toast("无法解析文件名格式，尝试使用 'Artists - Title' 格式", "error");
+  },
+
+  /** Rename current file — prompt user for new download filename */
+  renameCurrent() {
+    if (!this.selectedId) return;
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    const ext = entry.file.name.split(".").pop();
+    const current = entry._downloadName || entry._displayName || entry.file.name;
+    const baseName = current.replace(/\.[^.]+$/, "");
+    const newName = prompt("输入下载文件名（不含扩展名）:", baseName);
+    if (!newName || newName.trim() === "") return;
+
+    const fullName = newName.trim() + "." + ext;
+    entry._downloadName = fullName;
+    entry._displayName = fullName;
+    this.renderEditor();
+    this.renderFileList();
+    this.toast("下载时将使用: " + fullName, "info");
+  },
+
+  /** Save current edits (write ID3 to buffer) */
+  saveCurrent() {
+    this.saveCurrentToMemory();
+    if (!this.selectedId) return;
+
+    const entry = this.files.get(this.selectedId);
+    if (!entry || !entry.buffer) {
+      this.toast("无法保存: 文件数据不可用", "error");
+      return;
+    }
+
+    if (!this._isWritable(entry)) {
+      this.toast("该格式暂不支持浏览器端保存（支持 MP3/FLAC/M4A/OGG/WAV）", "error");
+      return;
+    }
+
+    try {
+      const newBuffer = this._writeTags(entry);
+      if (!newBuffer) {
+        this.toast("写入失败: 不支持的格式", "error");
+        return;
+      }
+      entry.buffer = newBuffer;
+      entry.modified = true;
+
+      this.renderFileList();
+      this.toast("标签已保存到内存（" + this._formatLabel(entry) + "）", "success");
+    } catch (err) {
+      this.toast("保存失败: " + err.message, "error");
+    }
+  },
+
+  /** Download the current file with modified tags — 保存并下载：先写入内存再输出文件 */
+  async downloadCurrent() {
+    this.saveCurrentToMemory();
+
+    if (!this.selectedId) return;
+    const entry = this.files.get(this.selectedId);
+    if (!entry || !entry.buffer) return;
+
+    // Auto-save unsaved changes before download
+    if (this._hasUnsavedChanges(entry)) {
+      this.saveCurrent();
+    }
+
+    // Ensure buffer has latest tags（统一走 _writeTags，支持全部五种格式）
+    if (entry.modified === false && this._hasUnsavedChanges(entry)) {
+      try {
+        const nb = this._writeTags(entry);
+        if (nb) entry.buffer = nb;
+      } catch (e) { /* proceed with original */ }
+    }
+
+    const blob = new Blob([entry.buffer], { type: entry.file.type || "audio/mpeg" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = entry._downloadName || entry.file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    this.toast("下载完成: " + (entry._downloadName || entry.file.name), "success");
+  },
+
+  /** Check if editor has unsaved changes vs entry.metadata */
+  _hasUnsavedChanges(entry) {
+    return (
+      (entry.metadata.title      || "") !== (document.getElementById("tagTitle")?.value      || "") ||
+      (entry.metadata.artist     || "") !== (document.getElementById("tagArtist")?.value     || "") ||
+      (entry.metadata.albumArtist|| "") !== (document.getElementById("tagAlbumArtist")?.value|| "") ||
+      (entry.metadata.composer   || "") !== (document.getElementById("tagComposer")?.value   || "") ||
+      (entry.metadata.album      || "") !== (document.getElementById("tagAlbum")?.value      || "") ||
+      (entry.metadata.year       || "") !== (document.getElementById("tagYear")?.value       || "") ||
+      (entry.metadata.track      || "") !== (document.getElementById("tagTrack")?.value      || "") ||
+      (entry.metadata.disc       || "") !== (document.getElementById("tagDisc")?.value       || "") ||
+      (entry.metadata.genre      || "") !== (document.getElementById("tagGenre")?.value      || "") ||
+      (entry.metadata.comment    || "") !== (document.getElementById("tagComment")?.value    || "") ||
+      (entry.metadata.lyrics     || "") !== (document.getElementById("tagLyrics")?.value     || "") ||
+      entry.metadata._newCover !== undefined ||
+      entry.metadata._removeCover
+    );
+  },
+
+  /** Check if file is MP3 (browser-side ID3 writing only works for MP3) */
+  _isMP3(entry) {
+    const ext = entry.file.name.split(".").pop().toLowerCase();
+    return ext === "mp3";
+  },
+
+  _isWritable(entry) {
+    return this._isMP3(entry)
+      || (entry.flacInfo && entry.flacInfo.isFLAC)
+      || (entry.m4aInfo && entry.m4aInfo.isM4A)
+      || (entry.oggInfo && entry.oggInfo.isOGG)
+      || (entry.wavInfo && entry.wavInfo.isWAV);
+  },
+
+  /** 当前文件的格式标识（用于提示） */
+  _formatLabel(entry) {
+    if (this._isMP3(entry)) return "MP3";
+    if (entry.flacInfo && entry.flacInfo.isFLAC) return "FLAC";
+    if (entry.m4aInfo && entry.m4aInfo.isM4A) return "M4A";
+    if (entry.oggInfo && entry.oggInfo.isOGG) return "OGG";
+    if (entry.wavInfo && entry.wavInfo.isWAV) return "WAV";
+    return "未知";
+  },
+
+  /**
+   * 统一标签写入：按格式分派到对应 writer，返回新 buffer；不支持则返回 null。
+   * 同时刷新对应格式的解析结果，保证二次读取/写入一致。
+   */
+  _writeTags(entry) {
+    if (entry.flacInfo && entry.flacInfo.isFLAC) {
+      const nb = FLAC.write(entry.buffer, entry.metadata, entry.flacInfo);
+      entry.flacInfo = FLAC.read(nb);
+      return nb;
+    }
+    if (this._isMP3(entry)) {
+      const nb = ID3.write(entry.buffer, entry.metadata, entry.id3);
+      entry.id3 = ID3.read(nb); // Re-parse
+      return nb;
+    }
+    if (entry.m4aInfo && entry.m4aInfo.isM4A) {
+      const nb = M4A.write(entry.buffer, entry.metadata, entry.m4aInfo);
+      entry.m4aInfo = M4A.read(nb);
+      return nb;
+    }
+    if (entry.oggInfo && entry.oggInfo.isOGG) {
+      const nb = OGG.write(entry.buffer, entry.metadata, entry.oggInfo);
+      entry.oggInfo = OGG.read(nb);
+      return nb;
+    }
+    if (entry.wavInfo && entry.wavInfo.isWAV) {
+      const nb = WAV.write(entry.buffer, entry.metadata, entry.wavInfo);
+      entry.wavInfo = WAV.read(nb);
+      return nb;
+    }
+    return null;
+  },
+
+  /** Reset current file's metadata to original */
+  async resetCurrent() {
+    if (!this.selectedId) return;
+    const entry = this.files.get(this.selectedId);
+    if (!entry) return;
+
+    entry.metadata = { ...entry.originalMetadata };
+    delete entry.metadata._newCover;
+    delete entry.metadata._removeCover;
+    entry.modified = false;
+    // Clear cover blob URL so renderCover regenerates from original metadata
+    if (entry._coverBlobUrl) { URL.revokeObjectURL(entry._coverBlobUrl); entry._coverBlobUrl = null; }
+
+    // Reset buffer to original — await to ensure state consistency
+    try {
+      const buf = await entry.file.arrayBuffer();
+      entry.buffer = buf;
+      entry.id3 = ID3.read(buf);
+    } catch (e) {
+      this.toast("还原失败: 无法重新读取文件", "error");
+      return;
+    }
+
+    this.renderEditor();
+    this.renderFileList();
+    this.toast("已还原为原始标签", "info");
+  },
+
+  /** Clear all files — also revoke blob URLs to prevent memory leaks */
+  clearAll() {
+    // Revoke all cover blob URLs before clearing
+    for (const [id, entry] of this.files) {
+      if (entry._coverBlobUrl) {
+        URL.revokeObjectURL(entry._coverBlobUrl);
+        entry._coverBlobUrl = null;
+      }
+    }
+    this.files.clear();
+    this.selectedId = null;
+    this.searchResults = [];
+    this._searchPage = 0;
+    this.renderFileList();
+  },
+
+  /** Clear only selected files */
+  clearSelected() {
+    const hasAnySelected = [...this.files.values()].some(e => e._selected);
+    if (!hasAnySelected) return;
+    for (const [id, entry] of this.files) {
+      if (entry._selected) {
+        if (entry._coverBlobUrl) {
+          URL.revokeObjectURL(entry._coverBlobUrl);
+          entry._coverBlobUrl = null;
+        }
+        this.files.delete(id);
+      }
+    }
+    this.selectedId = null;
+    this.renderFileList();
+  },
+
+  /** Show a toast notification */
+  toast(message, type = "info") {
+    const container = document.getElementById("toastContainer");
+    const el = document.createElement("div");
+    el.className = `toast ${type}`;
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = "0";
+      el.style.transition = "opacity .3s";
+      setTimeout(() => el.remove(), 300);
+    }, 2500);
+  },
+
+  /** Format file size in human-readable form */
+  formatSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  },
+
+  /** Escape HTML entities */
+  esc(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  },
+};
+
+// Initialize on DOM ready
+document.addEventListener("DOMContentLoaded", () => {
+  // ══════════════════════════════════════════════════════════════
+  //  Theme Button v4.0 — Web Component + 涟漪扩散 + 系统主题自动检测
+  //  Source: github.com/shiranzby/Day-night-toggle-button (v4.0)
+  //  Adapted for music-tag-cf (body.light convention, size=1.5)
+  // ══════════════════════════════════════════════════════════════
+
+  const _themeFunc = (root, initTheme, changeTheme) => {
+    const $ = s => { const d = root.querySelectorAll(s); return d.length === 1 ? d[0] : d; };
+    const mb = $('.mb'), db = $('.db'), cl = $('.cl'), cs = $('.cs'),
+          cll = $('.cll'), ct = $('.ct'), mo = $('.mo'), st = $('.st'), sr = $('.sr');
+    let isMoved = false, isClicked = false;
+
+    const applyToggle = () => {
+      if (isMoved) {
+        mb.style.transform = 'translateX(0)'; mb.style.backgroundColor = 'rgba(255,195,35,1)';
+        mb.style.boxShadow = '3em 3em 5em rgba(0,0,0,0.5), inset -3em -5em 3em -3em rgba(0,0,0,0.5), inset 4em 5em 2em -2em rgba(255,230,80,1)';
+        if (db[0]) db[0].style.transform = 'translateX(0)';
+        if (db[1]) db[1].style.transform = 'translateX(0)';
+        if (db[2]) db[2].style.transform = 'translateX(0)';
+        cl.style.transform = 'translateY(10em)'; cll.style.transform = 'translateY(10em)';
+        ct.style.backgroundColor = 'rgba(70,133,192,1)';
+        mo.forEach(m => m.style.opacity = '0');
+        st.style.transform = 'translateY(-125em)'; st.style.opacity = '0';
+      } else {
+        mb.style.transform = 'translateX(110em)'; mb.style.backgroundColor = 'rgba(195,200,210,1)';
+        mb.style.boxShadow = '3em 3em 5em rgba(0,0,0,0.5), inset -3em -5em 3em -3em rgba(0,0,0,0.5), inset 4em 5em 2em -2em rgba(255,255,210,1)';
+        if (db[0]) db[0].style.transform = 'translateX(110em)';
+        if (db[1]) db[1].style.transform = 'translateX(80em)';
+        if (db[2]) db[2].style.transform = 'translateX(50em)';
+        cl.style.transform = 'translateY(80em)'; cll.style.transform = 'translateY(80em)';
+        ct.style.backgroundColor = 'rgba(25,30,50,1)';
+        mo.forEach(m => m.style.opacity = '1');
+        st.style.transform = 'translateY(-62.5em)'; st.style.opacity = '1';
+      }
+      isMoved = !isMoved;
+    };
+
+    ct.onclick = () => {
+      applyToggle();
+      changeTheme(isMoved ? 'dark' : 'light');
+      isClicked = true; setTimeout(() => { isClicked = false; }, 500);
+    };
+
+    // Hover interaction
+    mb.addEventListener('mousemove', function() {
+      if (isClicked) return;
+      if (isMoved) {
+        mb.style.transform = 'translateX(100em)';
+        if (db[0]) db[0].style.transform = 'translateX(100em)';
+        if (db[1]) db[1].style.transform = 'translateX(73em)';
+        if (db[2]) db[2].style.transform = 'translateX(46em)';
+        if (sr[0]) { sr[0].style.top = '10em'; sr[0].style.left = '36em'; }
+        if (sr[1]) { sr[1].style.top = '40em'; sr[1].style.left = '87em'; }
+        if (sr[2]) { sr[2].style.top = '26em'; sr[2].style.left = '16em'; }
+        if (sr[3]) { sr[3].style.top = '38em'; sr[3].style.left = '63em'; }
+        if (sr[4]) { sr[4].style.top = '20.5em'; sr[4].style.left = '72em'; }
+        if (sr[5]) { sr[5].style.top = '51.5em'; sr[5].style.left = '35em'; }
+      } else {
+        mb.style.transform = 'translateX(10em)';
+        if (db[0]) db[0].style.transform = 'translateX(10em)';
+        if (db[1]) db[1].style.transform = 'translateX(7em)';
+        if (db[2]) db[2].style.transform = 'translateX(4em)';
+        cs.forEach((c, i) => {
+          const o = [[-24,10],[-12,-27],[17,-43],[46,-39],[70,-65],[109,-54],
+                      [-23,10],[-11,-26],[18,-42],[47,-38],[74,-64],[110,-55]];
+          if (i < o.length) { c.style.right = o[i][0]+'em'; c.style.bottom = o[i][1]+'em'; }
+        });
+      }
+    });
+    mb.addEventListener('mouseout', function() {
+      if (isClicked) return;
+      // Restore positions to correct state WITHOUT toggling isMoved
+      if (isMoved) {
+        mb.style.transform = 'translateX(110em)';
+        if (db[0]) db[0].style.transform = 'translateX(110em)';
+        if (db[1]) db[1].style.transform = 'translateX(80em)';
+        if (db[2]) db[2].style.transform = 'translateX(50em)';
+        if (sr[0]) { sr[0].style.top = '11em'; sr[0].style.left = '39em'; }
+        if (sr[1]) { sr[1].style.top = '39em'; sr[1].style.left = '91em'; }
+        if (sr[2]) { sr[2].style.top = '26em'; sr[2].style.left = '19em'; }
+        if (sr[3]) { sr[3].style.top = '37em'; sr[3].style.left = '66em'; }
+        if (sr[4]) { sr[4].style.top = '21em'; sr[4].style.left = '75em'; }
+        if (sr[5]) { sr[5].style.top = '51em'; sr[5].style.left = '38em'; }
+      } else {
+        mb.style.transform = 'translateX(0em)';
+        if (db[0]) db[0].style.transform = 'translateX(0em)';
+        if (db[1]) db[1].style.transform = 'translateX(0em)';
+        if (db[2]) db[2].style.transform = 'translateX(0em)';
+        cs.forEach((c, i) => {
+          const o = [[-20,10],[-10,-25],[20,-40],[50,-35],[75,-60],[110,-50],
+                      [-20,10],[-10,-25],[20,-40],[50,-35],[75,-60],[110,-50]];
+          if (i < o.length) { c.style.right = o[i][0]+'em'; c.style.bottom = o[i][1]+'em'; }
+        });
+      }
+    });
+
+    // Star twinkle animation
+    const dirs = ['2em','-2em'];
+    const rand = () => dirs[Math.floor(Math.random()*2)];
+    setInterval(() => { root.querySelectorAll('.cs').forEach(e => { e.style.transform = `translate(${rand()},${rand()})`; }); }, 1000);
+
+    // Apply initial state — only toggle if body is actually dark (no .light class)
+    const bodyIsLight = document.body.classList.contains('light');
+    if (initTheme === 'dark' && !bodyIsLight) requestAnimationFrame(() => applyToggle());
+
+    // System theme auto-detection
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener('change', () => {
+      if (mq.matches && !isMoved) { applyToggle(); changeTheme('dark'); }
+      else if (!mq.matches && isMoved) { applyToggle(); changeTheme('light'); }
+    });
+
+    return { applyToggle, getState: () => isMoved };
+  };
+
+  class ThemeButtonV4 extends HTMLElement {
+    static observedAttributes = ['value'];
+    attributeChangedCallback(name, oldVal, newVal) {
+      if (name === 'value' && oldVal && oldVal !== newVal && this._toggle && this._getState) {
+        const isDark = this._getState();
+        const wantDark = newVal === 'dark';
+        if (isDark !== wantDark) {
+          if (wantDark) requestAnimationFrame(() => this._toggle());
+          else this._toggle();
+        }
+      }
+    }
+    connectedCallback() {
+      const init = this.getAttribute('value') || 'dark';
+      const sz = +(this.getAttribute('size') || 3);
+      const shadow = this.attachShadow({ mode: 'closed' });
+      const c = document.createElement('div');
+      c.setAttribute('style', `font-size:${(sz/3).toFixed(2)}px;position:relative;display:inline-block`);
+      c.innerHTML = '<div class="ct" style="width:180em;height:70em;background:rgba(70,133,192,1);border-radius:100em;box-shadow:inset 0 0 5em 3em rgba(0,0,0,0.5);overflow:hidden;transition:.7s cubic-bezier(0,.5,1,1);cursor:pointer;position:relative;"><div class="mb" style="margin:7.5em 0 0 7.5em;width:55em;height:55em;background:rgba(255,195,35,1);border-radius:50%;box-shadow:3em 3em 5em rgba(0,0,0,0.5),inset -3em -5em 3em -3em rgba(0,0,0,0.5),inset 4em 5em 2em -2em rgba(255,230,80,1);transition:1s cubic-bezier(.56,1.35,.52,1);position:relative;z-index:3;"><div class="mo" style="position:absolute;background:rgba(150,160,180,1);box-shadow:inset 0 0 1em 1em rgba(0,0,0,0.3);border-radius:50%;transition:.5s;opacity:0;top:7.5em;left:25em;width:12.5em;height:12.5em"></div><div class="mo" style="position:absolute;background:rgba(150,160,180,1);box-shadow:inset 0 0 1em 1em rgba(0,0,0,0.3);border-radius:50%;transition:.5s;opacity:0;top:20em;left:7.5em;width:20em;height:20em"></div><div class="mo" style="position:absolute;background:rgba(150,160,180,1);box-shadow:inset 0 0 1em 1em rgba(0,0,0,0.3);border-radius:50%;transition:.5s;opacity:0;top:32.5em;left:32.5em;width:12.5em;height:12.5em"></div></div><div class="db" style="position:absolute;border-radius:50%;transition:1s cubic-bezier(.56,1.35,.52,1);top:-20em;left:-20em;width:110em;height:110em;background:rgba(255,255,255,0.2);z-index:-2"></div><div class="db" style="position:absolute;border-radius:50%;transition:1s cubic-bezier(.56,1.35,.52,1);top:-32.5em;left:-17.5em;width:135em;height:135em;background:rgba(255,255,255,0.1);z-index:-3"></div><div class="db" style="position:absolute;border-radius:50%;transition:1s cubic-bezier(.56,1.35,.52,1);top:-45em;left:-15em;width:160em;height:160em;background:rgba(255,255,255,0.05);z-index:-4"></div><div class="cl" style="transform:translateY(10em);transition:1s cubic-bezier(.56,1.35,.52,1);z-index:-2"><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:-20em;bottom:10em;width:50em;height:50em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:-10em;bottom:-25em;width:60em;height:60em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:20em;bottom:-40em;width:60em;height:60em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:50em;bottom:-35em;width:60em;height:60em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:75em;bottom:-60em;width:75em;height:75em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:110em;bottom:-50em;width:60em;height:60em"></div></div><div class="cll" style="position:absolute;right:0;bottom:25em;opacity:.5;z-index:-3"><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:-20em;bottom:10em;width:50em;height:50em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:-10em;bottom:-25em;width:60em;height:60em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:20em;bottom:-40em;width:60em;height:60em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:50em;bottom:-35em;width:60em;height:60em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:75em;bottom:-60em;width:75em;height:75em"></div><div class="cs" style="position:absolute;background:#fff;border-radius:50%;z-index:-1;right:110em;bottom:-50em;width:60em;height:60em"></div></div><div class="st" style="transform:translateY(-125em);z-index:-2;transition:1s cubic-bezier(.56,1.35,.52,1)"><div class="sr big" style="position:absolute;width:15em;height:15em;top:11em;left:39em"><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at left 0,transparent 7.5em,#fff)"></div><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at right 0,transparent 7.5em,#fff)"></div><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at 0 bottom,transparent 7.5em,#fff)"></div><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at right bottom,transparent 7.5em,#fff)"></div></div><div class="sr big" style="position:absolute;width:15em;height:15em;top:39em;left:91em"><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at left 0,transparent 7.5em,#fff)"></div><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at right 0,transparent 7.5em,#fff)"></div><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at 0 bottom,transparent 7.5em,#fff)"></div><div class="ss" style="float:left;width:7.5em;height:7.5em;background-image:radial-gradient(circle 7.5em at right bottom,transparent 7.5em,#fff)"></div></div><div class="sr med" style="position:absolute;width:10em;height:10em;top:26em;left:19em"><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at left 0,transparent 5em,#fff)"></div><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at right 0,transparent 5em,#fff)"></div><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at 0 bottom,transparent 5em,#fff)"></div><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at right bottom,transparent 5em,#fff)"></div></div><div class="sr med" style="position:absolute;width:10em;height:10em;top:37em;left:66em"><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at left 0,transparent 5em,#fff)"></div><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at right 0,transparent 5em,#fff)"></div><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at 0 bottom,transparent 5em,#fff)"></div><div class="ss" style="float:left;width:5em;height:5em;background-image:radial-gradient(circle 5em at right bottom,transparent 5em,#fff)"></div></div><div class="sr sml" style="position:absolute;width:6em;height:6em;top:21em;left:75em"><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at left 0,transparent 3em,#fff)"></div><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at right 0,transparent 3em,#fff)"></div><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at 0 bottom,transparent 3em,#fff)"></div><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at right bottom,transparent 3em,#fff)"></div></div><div class="sr sml" style="position:absolute;width:6em;height:6em;top:51em;left:38em"><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at left 0,transparent 3em,#fff)"></div><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at right 0,transparent 3em,#fff)"></div><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at 0 bottom,transparent 3em,#fff)"></div><div class="ss" style="float:left;width:3em;height:3em;background-image:radial-gradient(circle 3em at right bottom,transparent 3em,#fff)"></div></div></div></div>';
+      const style = document.createElement('style');
+      style.textContent = '.cs{transition:transform 6s,right 1s,bottom 1s}.sr{transition:1s}.big{--s:7.5px}.med{--s:5px}.sml{--s:3px}@keyframes st1{0%,20%{transform:scale(0)}20%,100%{transform:scale(1)}}@keyframes st2{0%,20%{transform:scale(0)}20%,100%{transform:scale(1)}}@keyframes st3{0%,20%{transform:scale(0)}20%,100%{transform:scale(1)}}@keyframes st4{0%,20%{transform:scale(0)}20%,100%{transform:scale(1)}}@keyframes st5{0%,20%{transform:scale(0)}20%,100%{transform:scale(1)}}@keyframes st6{0%,20%{transform:scale(0)}20%,100%{transform:scale(1)}}';
+      const result = _themeFunc(c, init, detail => {
+        this.dispatchEvent(new CustomEvent('change', { detail, bubbles: true }));
+      });
+      this._toggle = result.applyToggle;
+      this._getState = result.getState;
+      shadow.appendChild(style);
+      shadow.appendChild(c);
+    }
+  }
+
+  // Register v4.0 component (replaces old definition)
+  customElements.define("theme-button", ThemeButtonV4);
+
+  // ── Ripple Animation (View Transitions API) ──
+  let _rippleSyncing = false;
+  let _rippleX = 0, _rippleY = 0;
+  document.addEventListener('click', e => { _rippleX = e.clientX; _rippleY = e.clientY; }, true);
+
+  function applyRippleTheme(isDark) {
+    if (_rippleSyncing) return;
+    _rippleSyncing = true;
+
+    // Apply actual theme change
+    const doToggle = () => {
+      if (isDark) document.body.classList.remove('light');
+      else document.body.classList.add('light');
+      localStorage.setItem('music-tag-theme', isDark ? 'dark' : 'light');
+    };
+
+    if (document.startViewTransition) {
+      const cx = _rippleX, cy = _rippleY;
+      const endRadius = Math.hypot(
+        Math.max(cx, innerWidth - cx),
+        Math.max(cy, innerHeight - cy)
+      );
+      const vt = document.startViewTransition(doToggle);
+      vt.ready.then(() => {
+        document.documentElement.animate(
+          { clipPath: [
+            `circle(0 at ${cx}px ${cy}px)`,
+            `circle(${endRadius}px at ${cx}px ${cy}px)`
+          ] },
+          {
+            duration: 1400,
+            easing: 'cubic-bezier(0.4, 0, 0.5, 1)',
+            fill: 'forwards',
+            pseudoElement: '::view-transition-new(root)'
+          }
+        );
+        _rippleSyncing = false;
+      }).catch(() => { doToggle(); _rippleSyncing = false; });
+    } else {
+      doToggle();
+      _rippleSyncing = false;
+    }
+  }
+
+  // Listen for v4.0 theme-button change event → trigger ripple
+  const themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) {
+    themeBtn.addEventListener('change', (e) => {
+      applyRippleTheme(e.detail === 'dark');
+    });
+  }
+
+  App.init();
+});
+</script>
+</body>
+</html>
